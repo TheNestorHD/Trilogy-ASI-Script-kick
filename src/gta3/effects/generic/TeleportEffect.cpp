@@ -2,6 +2,10 @@
 #include "util/EffectInstance.h"
 #include "util/GameUtil.h"
 
+#include <algorithm>
+
+#include <CWorld.h>
+
 #include <CStreaming.h>
 
 class TeleportEffect : public EffectBase
