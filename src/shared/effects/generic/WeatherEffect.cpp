@@ -4,17 +4,16 @@
 
 class WeatherEffect : public EffectBase
 {
-    eWeatherType oldWeather = eWeatherType::WEATHER_EXTRASUNNY;
+    short oldWeather = 0;
 
-    eWeatherType weather = eWeatherType::WEATHER_EXTRASUNNY;
+    short weather = 0;
 
 public:
     void
     OnStart (EffectInstance *inst) override
     {
-        this->oldWeather = static_cast<eWeatherType> (CWeather::OldWeatherType);
-        this->weather = static_cast<eWeatherType> (
-            inst->GetCustomData ().value ("weatherID", 0));
+        this->oldWeather = CWeather::OldWeatherType;
+        this->weather = static_cast<short> (inst->GetCustomData ().value ("weatherID", 0));
     }
 
     void
