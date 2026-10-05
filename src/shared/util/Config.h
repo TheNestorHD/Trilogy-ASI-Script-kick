@@ -10,7 +10,6 @@ class Config
     static inline bool fileWatcherInitialized = false;
 
     static inline std::shared_ptr<cpptoml::table> config;
-#ifdef GTASA
     static inline std::string configContent
         = R"(#######################################################
 # Chaos Mod
@@ -174,9 +173,6 @@ PreventNewEffectsWhenFull = false
 CheckForIncompatibleEffects = false
 
 #######################################################)";
-#else
-    static inline std::string configContent = "";
-#endif
 
 public:
     static std::string
