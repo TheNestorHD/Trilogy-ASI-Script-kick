@@ -1,4 +1,4 @@
-#include "trilogychaosmod.sa_export.h"
+#include "util/Export.h"
 #include "util/Config.h"
 #include "util/DrawHelper.h"
 #include "util/EffectHandler.h"
@@ -23,13 +23,13 @@ UnProtectInstance ()
 
 extern "C"
 {
-    TrilogyChaosMod_API int
+    TRILOGYCHAOSMOD_API int
     GetModVersion ()
     {
         return MOD_VERSION;
     }
 
-    TrilogyChaosMod_API void
+    TRILOGYCHAOSMOD_API void
     QueueEffect (const char *jsonStr)
     {
         if (!jsonStr) return;
