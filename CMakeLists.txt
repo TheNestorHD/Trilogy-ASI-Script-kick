@@ -19,7 +19,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
-find_package(PluginSDK REQUIRED COMPONENTS gtasa)
+find_package(PluginSDK REQUIRED COMPONENTS gta3 gtavc gtasa)
 
 # Include cmakes
 include(cmake/DirectXSDK.cmake)
