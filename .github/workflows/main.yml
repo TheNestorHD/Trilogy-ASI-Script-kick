@@ -56,7 +56,7 @@ jobs:
       if: steps.cache-pluginsdk.outputs.cache-hit != 'true'
       uses: microsoft/setup-msbuild@v3
 
-    # 6. Generate and build PluginSDK ONLY if cache missed
+    # 6. Generate and build all classic-trilogy PluginSDK static libraries
     - name: Generate PluginSDK Solution via Premake
       if: steps.cache-pluginsdk.outputs.cache-hit != 'true'
       shell: cmd
@@ -66,7 +66,10 @@ jobs:
     - name: Build PluginSDK Static Libraries
       if: steps.cache-pluginsdk.outputs.cache-hit != 'true'
       shell: cmd
-      run: msbuild "%PLUGIN_SDK_DIR%\plugin_sa\Plugin_SA.vcxproj" /p:Configuration=Release /p:Platform=Win32 /m
+      run: |
+        msbuild "%PLUGIN_SDK_DIR%\plugin_III\Plugin_III.vcxproj" /p:Configuration=Release /p:Platform=Win32 /m
+        msbuild "%PLUGIN_SDK_DIR%\plugin_vc\Plugin_VC.vcxproj" /p:Configuration=Release /p:Platform=Win32 /m
+        msbuild "%PLUGIN_SDK_DIR%\plugin_sa\Plugin_SA.vcxproj" /p:Configuration=Release /p:Platform=Win32 /m
 
     # 7. Configure and Build CMake project
     - name: Configure CMake
@@ -82,16 +85,20 @@ jobs:
       shell: cmd
       run: |
         if not exist build\output\scripts mkdir build\output\scripts
+        if exist build\TrilogyChaosMod.III.asi copy build\TrilogyChaosMod.III.asi build\output\scripts\
+        if exist build\TrilogyChaosMod.VC.asi copy build\TrilogyChaosMod.VC.asi build\output\scripts\
         if exist build\TrilogyChaosMod.SA.asi copy build\TrilogyChaosMod.SA.asi build\output\scripts\
+        if exist TrilogyChaosMod.III.toml copy TrilogyChaosMod.III.toml build\output\scripts\
+        if exist TrilogyChaosMod.VC.toml copy TrilogyChaosMod.VC.toml build\output\scripts\
         if exist TrilogyChaosMod.SA.toml copy TrilogyChaosMod.SA.toml build\output\scripts\
         if exist lib\bass.dll copy lib\bass.dll build\output\
         if exist resources\ChaosMod xcopy /E /I /Y resources\ChaosMod build\output\ChaosMod\
         if exist THIRD_PARTY_NOTICES.md copy THIRD_PARTY_NOTICES.md build\output\
 
     # 9. Upload ASI artifact
-    - name: Upload SA Artifact
+    - name: Upload Classic Trilogy Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: "TrilogyChaosMod.SA"
+        name: "TrilogyChaosMod.ClassicTrilogy"
         path: build/output/
         if-no-files-found: ignore
