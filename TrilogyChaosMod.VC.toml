@@ -1,0 +1,26 @@
+#######################################################
+# Trilogy Chaos Mod
+#######################################################
+
+[Chaos]
+GUIWebsocketPort = 42069
+Volume = 100
+AlwaysCountDownEffects = false
+PlayEffectSound = true
+
+[Drawing]
+Enabled = true
+NumRecentEffects = 8
+RotationSeconds = 5
+DrawRemainingTimeBar = true
+DrawActiveEffects = true
+DrawCircles = true
+DrawVoting = true
+RainbowColors = true
+EffectsTopToBottom = true
+DrawVotesOnTop = true
+
+[CrowdControl]
+Enabled = false
+PreventNewEffectsWhenFull = false
+CheckForIncompatibleEffects = false
