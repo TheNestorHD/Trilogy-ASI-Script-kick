@@ -3,6 +3,8 @@
 #include "util/Config.h"
 #include "util/EffectHandler.h"
 
+#include <GameVersion.h>
+
 std::string
 Websocket::GetWebsocketURL ()
 {
@@ -30,7 +32,10 @@ Websocket::SendGameInfo ()
     json["type"] = "game";
     json["data"] = {
         { "id", GetGameId () },
-        { "protocolVersion", 2 }
+        { "version", plugin::GetGameVersionName () },
+        { "protocolVersion", 2 },
+        { "capabilities",
+          { "weather", "vehicle_spawn", "teleport" } }
     };
     SendWebsocketMessage (json);
 }
