@@ -2,6 +2,10 @@
 #include "util/EffectInstance.h"
 #include "util/GameUtil.h"
 
+#include <algorithm>
+
+#include <CWorld.h>
+
 #include <CGame.h>
 #include <CStreaming.h>
 #include <CTimeCycle.h>
