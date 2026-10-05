@@ -9,6 +9,32 @@ Websocket::GetWebsocketURL ()
     return CONFIG_CC_ENABLED ? CC_WEBSOCKET_URL : GetGUIWebsocketURL ();
 }
 
+const char *
+Websocket::GetGameId ()
+{
+#ifdef GTASA
+    return "san_andreas";
+#elif GTAVC
+    return "vice_city";
+#elif GTA3
+    return "gta3";
+#else
+    return "unknown";
+#endif
+}
+
+void
+Websocket::SendGameInfo ()
+{
+    nlohmann::json json;
+    json["type"] = "game";
+    json["data"] = {
+        { "id", GetGameId () },
+        { "protocolVersion", 2 }
+    };
+    SendWebsocketMessage (json);
+}
+
 std::string
 Websocket::GetGUIWebsocketURL ()
 {
@@ -36,8 +62,7 @@ Websocket::Setup ()
             }
             else if (msg->type == ix::WebSocketMessageType::Open)
             {
-                // std::cout << "Connection established" << std::endl;
-                // std::cout << "> " << std::flush;
+                SendGameInfo ();
             }
             else if (msg->type == ix::WebSocketMessageType::Error)
             {
