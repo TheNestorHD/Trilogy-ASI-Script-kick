@@ -17,16 +17,20 @@ Check out the [CONTRIBUTING](CONTRIBUTING.md) file for more information.
 Similar to the old [Vice City Chaos% mod](https://github.com/Lighnat0r-pers/gta-vc-chaos) by [Lightnat0r](https://github.com/Lighnat0r), it activates effects in the corresponding game every X seconds / minutes (cooldown can be defined in the GUI).
 
 # Which GTA games does it support?
-It started off as a mod for **San Andreas**, which is the one that is mainly supported right now.  
-However, there is already basic support for **Vice City** and **III** implemented. It will take longer to bring all (if possible) custom effects over, and also implement their corresponding ingame cheats though.
+The ASI is built as three game-specific targets:
+
+- **GTA San Andreas**
+- **GTA Vice City**
+- **GTA III**
+
+Vice City and III now have proper game-state safety handling, their own configuration files, the common voting renderer, and a first set of shared-compatible effects. Full effect parity with San Andreas is still a separate task.
 
 # Which versions of the games does it support?
 **GTA San Andreas**: v1.0 US  
-~~**GTA Vice City**: v1.0 US~~  
-~~**GTA III**: v1.0 US~~
+**GTA Vice City**: v1.0 EN  
+**GTA III**: v1.0 EN
 
-So far only San Andreas is officially supported.  
-Vice City and III have some sort of basic support in already, but the GUI doesn't support them yet.
+The CI pipeline builds all three classic targets against their corresponding Plugin-SDK components. The GUI/stream application still needs to expose the game-specific effect catalog for III/VC.
 
 # How do I downgrade my game to the required version?
 There's a San Andreas downgrader by gamerzworld in the GTAForums here:  
@@ -100,6 +104,12 @@ For Twitch you now have the option to have voting happen through chat messages (
 
 ![https://i.imgur.com/UDmUKet.png](https://i.imgur.com/UDmUKet.png)
 
+# How do I setup Kick voting?
+
+Kick chat should be integrated through the official Kick Developer API webhook event `chat.message.sent`, not by scraping the webpage. The stream/UI application receives chat messages, handles the vote, and sends the same `votes` websocket message already used by the in-game renderer.
+
+See [docs/KICK_INTEGRATION.md](docs/KICK_INTEGRATION.md) for the full protocol and reliability requirements.
+
 # How do I setup the YouTube voting? (Experimental)
 Head into the `Settings` tab and switch the Stream Mode to `YouTube`.
 
@@ -124,6 +134,10 @@ Or better yet: **Create the effect yourself and do a pull request!**
 That way you are helping with making the mod even better (or worse, depending on how you look at it).
 
 Check out the [CONTRIBUTING](CONTRIBUTING.md) file for more information.
+
+# GTA IV plans
+
+GTA IV is intentionally **not implemented** in this branch. A detailed architecture and staged roadmap is available in [docs/GTA4_ROADMAP.md](docs/GTA4_ROADMAP.md).
 
 # Credits
 ## [DK22Pac](https://github.com/DK22Pac) and everyone involved in the [plugin-sdk](https://github.com/DK22Pac/plugin-sdk)
