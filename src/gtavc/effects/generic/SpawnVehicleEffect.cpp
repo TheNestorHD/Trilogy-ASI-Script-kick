@@ -1,8 +1,11 @@
 #include "util/EffectBase.h"
 #include "util/EffectInstance.h"
 
+#include <algorithm>
+
 #include <CStreaming.h>
 #include <CTheScripts.h>
+#include <CWorld.h>
 #include <extensions/ScriptCommands.h>
 
 using namespace plugin;
