@@ -5,7 +5,6 @@
 
 #include <CStreaming.h>
 #include <CTheScripts.h>
-#include <CWorld.h>
 #include <extensions/ScriptCommands.h>
 
 using namespace plugin;
@@ -57,7 +56,6 @@ public:
 
         if (vehicle)
         {
-            vehicle->SetPosn (position);
             CTheScripts::ClearSpaceForMissionEntity (position, vehicle);
         }
 
