@@ -23,6 +23,8 @@ class Websocket
     static inline ix::WebSocket wsClient;
 
     static std::string GetWebsocketURL ();
+    static const char *GetGameId ();
+    static void SendGameInfo ();
 
 public:
     static void Setup ();
