@@ -15,8 +15,7 @@ public:
     bool
     CanActivate () override
     {
-        CPlayerPed *player = FindPlayerPed ();
-        return player && player->m_nAreaCode == 0;
+        return FindPlayerPed () != nullptr;
     }
 
     void
@@ -40,7 +39,8 @@ public:
         int vehicleID = inst->GetCustomData ().value ("vehicleID", 90);
         vehicleID = std::clamp (vehicleID, 90, 150);
 
-        CVector position = player->TransformFromObjectSpace (CVector (0.0f, 5.0f, 0.0f));
+        CVector position
+            = player->TransformFromObjectSpace (CVector (0.0f, 5.0f, 0.0f));
 
         CStreaming::RequestModel (vehicleID, 1);
         CStreaming::LoadAllRequestedModels (false);
