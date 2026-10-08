@@ -98,7 +98,11 @@ DrawHelper::DrawVersion ()
         int lines = CFont::GetNumberLines (0.0f, 0.0f, wVersion.c_str ());
 #else
         CFont::SetFontStyle (FONT_DEFAULT);
+#ifdef GTASA
         CFont::SetScaleForCurrentlanguage (1.0f, 1.4f);
+#else
+        CFont::SetScale (1.0f, 1.4f);
+#endif
         int lines
             = CFont::GetNumberLines (0.0f, 0.0f, (char *) version.c_str ());
 #endif
@@ -127,7 +131,7 @@ DrawHelper::DrawTopBar ()
     barWidth = std::max (0.0f, std::min (barWidth, maxWidth));
 
     // Draw black background bar
-    // The reason the top left has to be -1,-1
+    // The reason why the top left has to be -1,-1
     // is because otherwise there'd be a 1px gap
     CRect rect = CRect (-1.0f, -1.0f, SCREEN_WIDTH, SCREEN_COORD_TOP (30.0f));
     CSprite2d::DrawRect (rect, color::Black);
