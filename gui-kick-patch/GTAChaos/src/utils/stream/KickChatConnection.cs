@@ -19,8 +19,9 @@ namespace GTAChaos.Utils
     /// </summary>
     public class KickChatConnection : IStreamConnection
     {
+        // Current public Pusher app key used by recent Kick chat clients.
         private const string PusherUrl =
-            "wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c?protocol=7&client=js&version=7.6.0&flash=false";
+            "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false";
 
         private readonly string channelSlug;
         private int chatroomId;
@@ -29,6 +30,9 @@ namespace GTAChaos.Utils
         private CancellationTokenSource connectionCancellation;
         private Task receiveTask;
         private TaskCompletionSource<bool> subscriptionReady;
+
+        /// <summary>Diagnostic for the most recent failed connection attempt.</summary>
+        public string LastError { get; private set; } = string.Empty;
         private readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
         private readonly object seenLock = new object();
         private readonly HashSet<string> seenMessageIds = new HashSet<string>();
@@ -48,9 +52,11 @@ namespace GTAChaos.Utils
         public async Task<bool> TryConnect()
         {
             this.Kill();
+            this.LastError = string.Empty;
 
             if (string.IsNullOrWhiteSpace(this.channelSlug))
             {
+                this.LastError = "The Kick channel slug is empty. Enter the channel name only, without a URL.";
                 OnLoginError?.Invoke(this, EventArgs.Empty);
                 return false;
             }
@@ -61,6 +67,8 @@ namespace GTAChaos.Utils
             }
             catch (Exception ex)
             {
+                this.LastError = "Could not retrieve the public Kick chatroom ID. " +
+                    ex.GetBaseException().Message;
                 Debug.WriteLine("Kick: could not resolve chatroom: " + ex);
                 OnLoginError?.Invoke(this, EventArgs.Empty);
                 return false;
@@ -74,11 +82,18 @@ namespace GTAChaos.Utils
             Task completed = await Task.WhenAny(this.subscriptionReady.Task, Task.Delay(TimeSpan.FromSeconds(15)));
             if (completed != this.subscriptionReady.Task || !this.subscriptionReady.Task.Result)
             {
+                if (string.IsNullOrWhiteSpace(this.LastError))
+                {
+                    this.LastError = "Timed out waiting for Kick/Pusher to confirm the chatroom subscription. " +
+                        "The public WebSocket endpoint may be blocked or may have changed.";
+                }
+
                 this.Kill();
                 OnLoginError?.Invoke(this, EventArgs.Empty);
                 return false;
             }
 
+            this.LastError = string.Empty;
             return true;
         }
 
@@ -87,10 +102,14 @@ namespace GTAChaos.Utils
         private async Task<int> ResolveChatroomIdAsync()
         {
             string escapedSlug = Uri.EscapeDataString(this.channelSlug);
+            // Kick's public web endpoints have varied over time. Try the
+            // chatroom endpoint and both channel-info routes, which may contain
+            // chatroom.id. The v1 fallback must include "/channels/{slug}".
             string[] urls =
             {
                 $"https://kick.com/api/v2/channels/{escapedSlug}/chatroom",
-                $"https://kick.com/api/v1/{escapedSlug}/chatroom"
+                $"https://kick.com/api/v1/channels/{escapedSlug}",
+                $"https://kick.com/api/v2/channels/{escapedSlug}"
             };
 
             Exception lastError = null;
@@ -155,7 +174,9 @@ namespace GTAChaos.Utils
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("Kick websocket disconnected: " + ex.Message);
+                    this.LastError = "Kick WebSocket error: " + ex.GetBaseException().Message;
+                    Debug.WriteLine("Kick websocket disconnected: " + ex);
+                    this.subscriptionReady?.TrySetResult(false);
                 }
                 finally
                 {
@@ -193,10 +214,22 @@ namespace GTAChaos.Utils
                 return;
             }
 
+            if (eventName == "pusher:error" ||
+                eventName == "pusher:subscription_error" ||
+                eventName == "pusher_internal:subscription_error")
+            {
+                string detail = envelope["data"]?.ToString();
+                this.LastError = $"Kick/Pusher rejected the chat subscription ({eventName}). {detail}";
+                Debug.WriteLine(this.LastError);
+                this.subscriptionReady?.TrySetResult(false);
+                return;
+            }
+
             if (eventName == "pusher_internal:subscription_succeeded")
             {
                 bool wasConnected = this.isConnected;
                 this.isConnected = true;
+                this.LastError = string.Empty;
                 this.subscriptionReady?.TrySetResult(true);
                 if (!wasConnected)
                     OnConnected?.Invoke(this, EventArgs.Empty);
