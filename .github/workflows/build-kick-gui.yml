@@ -1,0 +1,70 @@
+name: Build Kick-enabled Chaos GUI
+
+on:
+  push:
+    branches:
+      - feature/kick-chat-gui-recovery
+    paths:
+      - "gui-kick-patch/**"
+      - ".github/workflows/build-kick-gui.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-gui:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Checkout the upstream Chaos GUI at a known revision
+        shell: pwsh
+        run: |
+          git clone https://github.com/gta-chaos-mod/Trilogy-GUI-Tool.git gui-source
+          git -C gui-source checkout 688dccc2622ad85985d893bb683f0582f59d9b98
+
+      - name: Apply the Kick integration overlay
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:GITHUB_WORKSPACE "gui-source"
+          Copy-Item "gui-kick-patch/GTAChaos/Form1.cs" "$root/GTAChaos/Form1.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/GTAChaos.csproj" "$root/GTAChaos/GTAChaos.csproj" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/StreamHandler.cs" "$root/GTAChaos/src/utils/stream/StreamHandler.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/KickChatConnection.cs" "$root/GTAChaos/src/utils/stream/KickChatConnection.cs" -Force
+          Copy-Item "gui-kick-patch/UPSTREAM.md" "$root/KICK_CHAT_README.md" -Force
+
+      - name: Install NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore GUI dependencies
+        shell: pwsh
+        run: |
+          nuget restore "gui-source/GTA SA Chaos.sln" -NonInteractive -PackagesDirectory "gui-source/packages"
+
+      - name: Build GUI
+        shell: pwsh
+        run: |
+          msbuild "gui-source/GTAChaos/GTAChaos.csproj" /p:Configuration=Release /p:Platform=AnyCPU /m /v:minimal
+          if ($LASTEXITCODE -ne 0) { throw "MSBuild failed for the Kick-enabled GUI." }
+
+      - name: Stage GUI artifact
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE "gui-source/GTAChaos/bin/Release"
+          if (-not (Test-Path (Join-Path $buildDir "GTAChaos.exe"))) {
+            Get-ChildItem "gui-source" -Recurse -Filter "GTAChaos.exe" | ForEach-Object { Write-Host $_.FullName }
+            throw "GTAChaos.exe was not found after a successful build."
+          }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          Copy-Item "$buildDir/*" "dist/" -Recurse -Force
+          Copy-Item "gui-kick-patch/UPSTREAM.md" "dist/README-KICK.txt" -Force
+
+      - name: Upload Kick-enabled GUI
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTAChaos.KickChat
+          path: dist/**
+          if-no-files-found: error
+          retention-days: 14
