@@ -20,13 +20,13 @@ namespace GTAChaos.Utils
     public class KickChatConnection : IStreamConnection
     {
         // Kick's public Pusher key is unofficial and the cluster can change.
-        // Try the commonly used Pusher clusters rather than hard-failing on one
-        // stale cluster assignment when Pusher returns error 4001.
+        // Probe only clusters documented by Pusher. In particular, "us1" is not
+        // a public Pusher Channels cluster and its hostname does not resolve.
         private const string PusherAppKey = "32cbd69e4b950bf97679";
         private const string PusherClientVersion = "8.4.0";
         private static readonly string[] PusherClusters =
         {
-            "us2", "us1", "us3", "mt1", "eu", "ap1", "ap2", "ap3"
+            "us2", "us3", "mt1", "eu", "ap1", "ap2", "ap3", "ap4", "sa1"
         };
 
         private static Uri BuildPusherUri(string cluster)
