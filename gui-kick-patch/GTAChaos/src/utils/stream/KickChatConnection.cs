@@ -19,17 +19,25 @@ namespace GTAChaos.Utils
     /// </summary>
     public class KickChatConnection : IStreamConnection
     {
-        // Kick's public Pusher endpoint. Keep the app key and cluster separate so
-        // they cannot silently drift apart in a copied URL. A stale GUI build that
-        // uses a different key can fail with Pusher error 4001 ("key not in cluster").
+        // Kick's public Pusher key is unofficial and the cluster can change.
+        // Try the commonly used Pusher clusters rather than hard-failing on one
+        // stale cluster assignment when Pusher returns error 4001.
         private const string PusherAppKey = "32cbd69e4b950bf97679";
-        private const string PusherCluster = "us2";
         private const string PusherClientVersion = "8.4.0";
+        private static readonly string[] PusherClusters =
+        {
+            "us2", "us1", "us3", "mt1", "eu", "ap1", "ap2", "ap3"
+        };
 
-        private static Uri BuildPusherUri()
+        private static Uri BuildPusherUri(string cluster)
         {
             return new Uri(
-                $"wss://ws-{PusherCluster}.pusher.com/app/{PusherAppKey}?protocol=7&client=js&version={PusherClientVersion}&flash=false");
+                $"wss://ws-{cluster}.pusher.com/app/{PusherAppKey}?protocol=7&client=js&version={PusherClientVersion}&flash=false");
+        }
+
+        private sealed class PusherClusterMismatchException : Exception
+        {
+            public PusherClusterMismatchException(string message) : base(message) { }
         }
 
         private readonly string channelSlug;
@@ -159,14 +167,18 @@ namespace GTAChaos.Utils
 
         private async Task RunConnectionLoopAsync(CancellationToken token)
         {
+            int clusterIndex = 0;
+            var rejectedClusters = new List<string>();
+
             while (!token.IsCancellationRequested)
             {
+                string cluster = PusherClusters[clusterIndex];
                 ClientWebSocket socket = new ClientWebSocket();
                 this.currentSocket = socket;
                 try
                 {
                     socket.Options.SetRequestHeader("Origin", "https://kick.com");
-                    await socket.ConnectAsync(BuildPusherUri(), token);
+                    await socket.ConnectAsync(BuildPusherUri(cluster), token);
 
                     while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
                     {
@@ -180,6 +192,23 @@ namespace GTAChaos.Utils
                 catch (OperationCanceledException)
                 {
                     break;
+                }
+                catch (PusherClusterMismatchException ex)
+                {
+                    rejectedClusters.Add(cluster);
+                    this.LastError = $"Pusher rejected app key in cluster '{cluster}': {ex.Message} " +
+                        $"Tried clusters: {string.Join(", ", rejectedClusters)}.";
+                    Debug.WriteLine("Kick Pusher cluster mismatch: " + this.LastError);
+
+                    if (rejectedClusters.Count >= PusherClusters.Length)
+                    {
+                        this.LastError += " None of the known clusters accepted Kick's public key.";
+                        this.subscriptionReady?.TrySetResult(false);
+                    }
+                    else
+                    {
+                        clusterIndex = (clusterIndex + 1) % PusherClusters.Length;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -199,7 +228,10 @@ namespace GTAChaos.Utils
 
                 if (!token.IsCancellationRequested)
                 {
-                    try { await Task.Delay(TimeSpan.FromSeconds(3), token); }
+                    TimeSpan retryDelay = rejectedClusters.Count > 0
+                        ? TimeSpan.FromMilliseconds(250)
+                        : TimeSpan.FromSeconds(3);
+                    try { await Task.Delay(retryDelay, token); }
                     catch (OperationCanceledException) { break; }
                 }
             }
@@ -227,7 +259,23 @@ namespace GTAChaos.Utils
                 eventName == "pusher:subscription_error" ||
                 eventName == "pusher_internal:subscription_error")
             {
-                string detail = envelope["data"]?.ToString();
+                JToken errorData = envelope["data"];
+                string detail = errorData?.ToString() ?? string.Empty;
+                JObject errorObject = errorData as JObject;
+                if (errorObject == null && errorData != null)
+                {
+                    try { errorObject = JObject.Parse(errorData.ToString()); }
+                    catch { }
+                }
+
+                int errorCode;
+                bool isClusterMismatch = eventName == "pusher:error" &&
+                    int.TryParse(errorObject?["code"]?.ToString(), out errorCode) &&
+                    errorCode == 4001;
+
+                if (isClusterMismatch)
+                    throw new PusherClusterMismatchException(detail);
+
                 this.LastError = $"Kick/Pusher rejected the chat subscription ({eventName}). {detail}";
                 Debug.WriteLine(this.LastError);
                 this.subscriptionReady?.TrySetResult(false);
