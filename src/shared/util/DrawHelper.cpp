@@ -109,9 +109,15 @@ DrawHelper::DrawVersion ()
 
         float x = screen::GetCoord (15.0f, screen::SIDE_LEFT);
         float y = screen::GetCoord (lines * 50.0f, screen::SIDE_BOTTOM);
+#ifdef GTAVC
+        CRect backgroundBox (
+            x, y, x + CFont::GetStringWidth (wVersion.c_str (), true),
+            screen::GetCoord (0.0f, screen::SIDE_BOTTOM));
+#else
         CRect backgroundBox (
             x, y, x + CFont::GetStringWidth ((char *) version.c_str (), true),
             screen::GetCoord (0.0f, screen::SIDE_BOTTOM));
+#endif
 
         CSprite2d::DrawRect (backgroundBox, color::Black);
         gamefont::Print (gamefont::LeftBottom, gamefont::AlignLeft,
