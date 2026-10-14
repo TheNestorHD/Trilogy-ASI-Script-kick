@@ -1062,7 +1062,23 @@ namespace GTAChaos.Forms
 
                 this.stream.OnLoginError += (_sender, _e) =>
                 {
-                    MessageBox.Show("There was an error trying to log in to the account. Invalid Access Token?", "Stream Login Error");
+                    string errorTitle = "Stream Login Error";
+                    string errorMessage = "There was an error trying to log in to the account. Invalid Access Token?";
+
+                    if (_sender is KickChatConnection kickConnection)
+                    {
+                        errorTitle = "Kick Chat Connection Error";
+                        string details = string.IsNullOrWhiteSpace(kickConnection.LastError)
+                            ? "Kick did not provide additional connection details."
+                            : kickConnection.LastError;
+
+                        errorMessage = "Could not connect to the public Kick chatroom.\n\n" +
+                            "Details: " + details + "\n\n" +
+                            "Kick mode does not require an Access Token. Enter only the channel name, " +
+                            "without @ or a URL.";
+                    }
+
+                    MessageBox.Show(errorMessage, errorTitle);
                     this.Invoke(new Action(() =>
                     {
                         this.buttonSwitchMode.Enabled = true;
