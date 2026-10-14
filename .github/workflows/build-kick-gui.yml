@@ -41,7 +41,7 @@ jobs:
       - name: Restore GUI dependencies
         shell: pwsh
         run: |
-          nuget restore "gui-source/GTA SA Chaos.sln" -NonInteractive -PackagesDirectory "gui-source/packages"
+          nuget restore "gui-source/GTA Chaos.sln" -NonInteractive -PackagesDirectory "gui-source/packages"
 
       - name: Build GUI
         shell: pwsh
