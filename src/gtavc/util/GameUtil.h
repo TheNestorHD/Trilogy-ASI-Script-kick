@@ -21,7 +21,6 @@ public:
 
         switch (player->m_ePedState)
         {
-            case PEDSTATE_ARRESTED:
             case PEDSTATE_DEAD:
             case PEDSTATE_DIE:
                 return false;
