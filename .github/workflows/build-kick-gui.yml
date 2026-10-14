@@ -43,6 +43,9 @@ jobs:
         run: |
           nuget restore "gui-source/GTA Chaos.sln" -NonInteractive -PackagesDirectory "gui-source/packages"
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
       - name: Build GUI
         shell: pwsh
         run: |
