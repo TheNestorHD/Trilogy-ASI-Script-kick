@@ -159,7 +159,9 @@ namespace GTAChaos.Utils
                 }
                 finally
                 {
-                    this.MarkDisconnected();
+                    // Drop the transport state quietly. The GUI must not treat
+                    // a transient socket failure as a user-requested disconnect.
+                    this.isConnected = false;
                     try { socket.Dispose(); } catch { }
                     if (ReferenceEquals(this.currentSocket, socket))
                         this.currentSocket = null;
@@ -186,7 +188,7 @@ namespace GTAChaos.Utils
                 await SendPusherJsonAsync(socket, new
                 {
                     @event = "pusher:subscribe",
-                    data = new { channel = $"chatrooms.{this.chatroomId}.v2" }
+                    data = new { channel = $"chatrooms.{this.chatroomId}.v2", auth = string.Empty }
                 }, token);
                 return;
             }
@@ -299,14 +301,6 @@ namespace GTAChaos.Utils
             }
         }
 
-        private void MarkDisconnected()
-        {
-            bool wasConnected = this.isConnected;
-            this.isConnected = false;
-            if (wasConnected)
-                OnDisconnected?.Invoke(this, EventArgs.Empty);
-        }
-
         private class KickChatItem
         {
             public string Author { get; }
@@ -389,9 +383,18 @@ namespace GTAChaos.Utils
         public void Kill()
         {
             CancellationTokenSource cancellation = this.connectionCancellation;
+            ClientWebSocket socket = this.currentSocket;
+            bool hadSession = cancellation != null || socket != null || this.receiveTask != null;
+
             try { cancellation?.Cancel(); } catch { }
-            try { this.currentSocket?.Abort(); } catch { }
-            this.MarkDisconnected();
+            try { socket?.Abort(); } catch { }
+
+            this.connectionCancellation = null;
+            this.currentSocket = null;
+            this.isConnected = false;
+
+            if (hadSession)
+                OnDisconnected?.Invoke(this, EventArgs.Empty);
         }
 
         public void SendEffectVotingToGame(bool undetermined = true)
