@@ -731,22 +731,6 @@ namespace GTAChaos.Utils
         }
 
 
-        private void SendMessage(string text)
-        {
-            // Read-only chat listener: never sends messages to Kick.
-        }
-
-        private static string RemoveSpecialCharacters(string text, bool noSpaces = true)
-        {
-            string regex = noSpaces ? @"[^A-Za-z0-9]" : @"[^A-Za-z0-9 ]";
-            return Regex.Replace(text ?? string.Empty, regex, string.Empty);
-        }
-
-        private int TryParseUserChoice(string text)
-        {
-            return int.TryParse(text, out int choice) ? choice - 1 : -1;
-        }
-
         public event EventHandler<EventArgs> OnConnected;
         public event EventHandler<EventArgs> OnDisconnected;
         public event EventHandler<EventArgs> OnLoginError;
