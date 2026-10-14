@@ -19,9 +19,18 @@ namespace GTAChaos.Utils
     /// </summary>
     public class KickChatConnection : IStreamConnection
     {
-        // Current public Pusher app key used by recent Kick chat clients.
-        private const string PusherUrl =
-            "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false";
+        // Kick's public Pusher endpoint. Keep the app key and cluster separate so
+        // they cannot silently drift apart in a copied URL. A stale GUI build that
+        // uses a different key can fail with Pusher error 4001 ("key not in cluster").
+        private const string PusherAppKey = "32cbd69e4b950bf97679";
+        private const string PusherCluster = "us2";
+        private const string PusherClientVersion = "8.4.0";
+
+        private static Uri BuildPusherUri()
+        {
+            return new Uri(
+                $"wss://ws-{PusherCluster}.pusher.com/app/{PusherAppKey}?protocol=7&client=js&version={PusherClientVersion}&flash=false");
+        }
 
         private readonly string channelSlug;
         private int chatroomId;
@@ -157,7 +166,7 @@ namespace GTAChaos.Utils
                 try
                 {
                     socket.Options.SetRequestHeader("Origin", "https://kick.com");
-                    await socket.ConnectAsync(new Uri(PusherUrl), token);
+                    await socket.ConnectAsync(BuildPusherUri(), token);
 
                     while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
                     {
