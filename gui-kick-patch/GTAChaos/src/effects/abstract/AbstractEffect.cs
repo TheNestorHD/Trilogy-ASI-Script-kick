@@ -10,8 +10,9 @@ using Newtonsoft.Json;
 namespace GTAChaos.Effects
 {
     /// <summary>
-    /// Loads per-effect duration overrides from effect_durations.json. A null duration keeps
-    /// the effect's normal duration; numeric values are expressed in seconds.
+    /// Loads per-effect display-name and duration overrides from effect_durations.json.
+    /// The name is the custom display name used by the game and stream overlay. A null
+    /// duration keeps the effect's normal duration; numeric values are expressed in seconds.
     /// </summary>
     public sealed class EffectDurationSetting
     {
@@ -84,7 +85,9 @@ namespace GTAChaos.Effects
                         needsSave = true;
                     }
 
-                    if (!string.Equals(setting.Name, name, StringComparison.Ordinal))
+                    // Populate missing names for new effects, but never overwrite a user's
+                    // custom name when the GUI starts.
+                    if (string.IsNullOrWhiteSpace(setting.Name))
                     {
                         setting.Name = name;
                         needsSave = true;
@@ -113,6 +116,22 @@ namespace GTAChaos.Effects
 
                 initialized = true;
             }
+        }
+
+        public static string GetCustomDisplayName(string effectId, string fallbackName)
+        {
+            Initialize();
+
+            lock (Sync)
+            {
+                if (Settings.TryGetValue(effectId ?? string.Empty, out EffectDurationSetting setting) &&
+                    !string.IsNullOrWhiteSpace(setting.Name))
+                {
+                    return setting.Name.Trim();
+                }
+            }
+
+            return fallbackName;
         }
 
         public static int? GetDurationMilliseconds(string effectId)
@@ -181,8 +200,18 @@ namespace GTAChaos.Effects
             return this;
         }
 
-        public virtual string GetDisplayName(DisplayNameType type = DisplayNameType.GAME) =>
-            // We technically set all names already but let's safe-guard this anyway
+        public virtual string GetDisplayName(DisplayNameType type = DisplayNameType.GAME)
+        {
+            return EffectDurationOverrides.GetCustomDisplayName(
+                this.GetID(),
+                this.GetOriginalDisplayName(type));
+        }
+
+        /// <summary>
+        /// Returns the built-in name without applying effect_durations.json overrides.
+        /// Used while initializing the JSON defaults to avoid a recursive name lookup.
+        /// </summary>
+        public string GetOriginalDisplayName(DisplayNameType type = DisplayNameType.GAME) =>
             this.DisplayNames.ContainsKey(type) ? this.DisplayNames[type] : this.DisplayNames[DisplayNameType.GAME];
 
         public string GetSubtext() => this.Subtext;
