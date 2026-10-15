@@ -213,7 +213,15 @@ namespace GTAChaos.Utils
                     // report different errors instead of the same generic message.
                     string browserVersion = CoreWebView2Environment.GetAvailableBrowserVersionString();
                     Debug.WriteLine("WebView2 browser runtime: " + browserVersion);
-                    await this.webView.EnsureCoreWebView2Async();
+                    // Keep the chat renderer and its timers active when Windows minimizes or occludes this window.
+                    // Otherwise Chromium may throttle the page and MutationObserver misses votes.
+                    CoreWebView2EnvironmentOptions browserOptions = new CoreWebView2EnvironmentOptions(
+                        "--disable-background-timer-throttling " +
+                        "--disable-renderer-backgrounding " +
+                        "--disable-backgrounding-occluded-windows");
+                    CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(
+                        null, null, browserOptions);
+                    await this.webView.EnsureCoreWebView2Async(environment);
 
                     this.webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                     this.webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
