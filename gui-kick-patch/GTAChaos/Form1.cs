@@ -50,6 +50,7 @@ namespace GTAChaos.Forms
             this.stopwatch = new Stopwatch();
 
             EffectDatabase.PopulateEffects("san_andreas");
+            EffectDurationOverrides.Initialize();
             this.PopulateEffectTreeList();
 
             this.PopulateMainCooldowns();
