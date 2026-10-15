@@ -2,10 +2,138 @@
 using GTAChaos.Utils;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace GTAChaos.Effects
 {
+    /// <summary>
+    /// Loads per-effect duration overrides from effect_durations.json. A null duration keeps
+    /// the effect's normal duration; numeric values are expressed in seconds.
+    /// </summary>
+    public sealed class EffectDurationSetting
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("duration_seconds")]
+        public int? DurationSeconds { get; set; }
+    }
+
+    public static class EffectDurationOverrides
+    {
+        private static readonly object Sync = new();
+        private static readonly Dictionary<string, EffectDurationSetting> Settings =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static bool initialized;
+
+        private static string SettingsPath =>
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "effect_durations.json");
+
+        public static void Initialize()
+        {
+            lock (Sync)
+            {
+                if (initialized)
+                    return;
+
+                string path = SettingsPath;
+                bool needsSave = !File.Exists(path);
+
+                if (!needsSave)
+                {
+                    try
+                    {
+                        Dictionary<string, EffectDurationSetting> loaded =
+                            JsonConvert.DeserializeObject<Dictionary<string, EffectDurationSetting>>(
+                                File.ReadAllText(path));
+
+                        if (loaded != null)
+                        {
+                            foreach (KeyValuePair<string, EffectDurationSetting> entry in loaded)
+                            {
+                                if (!string.IsNullOrWhiteSpace(entry.Key))
+                                    Settings[entry.Key] = entry.Value ?? new EffectDurationSetting();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Never overwrite a user's file when it contains invalid JSON.
+                        Debug.WriteLine("[EffectDurations] Could not read " + path + ": " + ex.Message);
+                        initialized = true;
+                        return;
+                    }
+                }
+
+                foreach (WeightedRandomBag<AbstractEffect>.Entry entry in EffectDatabase.Effects.Get())
+                {
+                    AbstractEffect effect = entry.item;
+                    if (effect == null || string.IsNullOrWhiteSpace(effect.GetID()))
+                        continue;
+
+                    string id = effect.GetID();
+                    string name = effect.GetDisplayName(DisplayNameType.UI);
+
+                    if (!Settings.TryGetValue(id, out EffectDurationSetting setting))
+                    {
+                        setting = new EffectDurationSetting();
+                        Settings[id] = setting;
+                        needsSave = true;
+                    }
+
+                    if (!string.Equals(setting.Name, name, StringComparison.Ordinal))
+                    {
+                        setting.Name = name;
+                        needsSave = true;
+                    }
+
+                    if (setting.DurationSeconds.HasValue && setting.DurationSeconds.Value < 1)
+                    {
+                        setting.DurationSeconds = null;
+                        needsSave = true;
+                    }
+                }
+
+                if (needsSave)
+                {
+                    try
+                    {
+                        File.WriteAllText(path,
+                            JsonConvert.SerializeObject(Settings, Formatting.Indented) +
+                            Environment.NewLine);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("[EffectDurations] Could not write " + path + ": " + ex.Message);
+                    }
+                }
+
+                initialized = true;
+            }
+        }
+
+        public static int? GetDurationMilliseconds(string effectId)
+        {
+            Initialize();
+
+            lock (Sync)
+            {
+                if (Settings.TryGetValue(effectId ?? string.Empty, out EffectDurationSetting setting) &&
+                    setting.DurationSeconds.HasValue &&
+                    setting.DurationSeconds.Value >= 1)
+                {
+                    long milliseconds = (long)setting.DurationSeconds.Value * 1000L;
+                    return (int)Math.Min(milliseconds, int.MaxValue);
+                }
+            }
+
+            return null;
+        }
+    }
+
     public enum DisplayNameType
     {
         GAME,
@@ -103,7 +231,15 @@ namespace GTAChaos.Effects
         {
             if (duration == -1)
             {
-                if (this.Duration != -1)
+                int? customDuration = EffectDurationOverrides.GetDurationMilliseconds(this.GetID());
+
+                if (customDuration.HasValue)
+                {
+                    // A JSON override is the final desired duration; do not apply the
+                    // effect's default multiplier to a value the user explicitly chose.
+                    duration = customDuration.Value;
+                }
+                else if (this.Duration != -1)
                 {
                     duration = this.Duration;
                 }
@@ -114,8 +250,8 @@ namespace GTAChaos.Effects
                 }
             }
 
-            // Cap the final duration, after effect-specific multipliers and fixed durations.
-            if (Shared.IsStreamMode)
+            // Cap the final duration, after JSON overrides, multipliers and fixed durations.
+            if (Shared.IsStreamMode && duration > 0)
             {
                 duration = Math.Min(duration, 1000 * 30);
             }
