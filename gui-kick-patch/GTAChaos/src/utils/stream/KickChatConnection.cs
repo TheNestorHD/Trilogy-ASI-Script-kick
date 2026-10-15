@@ -223,7 +223,7 @@ namespace GTAChaos.Utils
                     this.webView.CoreWebView2.NavigationCompleted += this.CoreWebView2_NavigationCompleted;
 
                     await this.webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(ChatObserverScript);
-                    this.webView.CoreWebView2.Navigate("https://kick.com/" + Uri.EscapeDataString(this.channelSlug));
+                    this.webView.CoreWebView2.Navigate("https://kick.com/popout/" + Uri.EscapeDataString(this.channelSlug) + "/chat");
                 }
                 catch (Exception ex)
                 {
@@ -512,6 +512,8 @@ namespace GTAChaos.Utils
                 if (choice is >= 0 and <= 2)
                 {
                     this.effectVoting?.TryAddVote(username, choice);
+                    // Refresh the in-game voting overlay immediately after every accepted vote.
+                    this.SendEffectVotingToGame();
                 }
             }
         }
