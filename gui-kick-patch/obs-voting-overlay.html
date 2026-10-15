@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GTA Chaos Mod — OBS Voting Overlay</title>
+<style>
+  :root {
+    --green: #53fc18;
+    --green-soft: rgba(83, 252, 24, .14);
+    --cyan: #73e6ff;
+    --white: #f5f8fb;
+    --muted: #a9b3be;
+    --panel: rgba(9, 13, 17, .94);
+    --panel-2: rgba(21, 29, 35, .96);
+    --line: rgba(255, 255, 255, .11);
+    --shadow: 0 22px 72px rgba(0, 0, 0, .46);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    color: var(--white);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+  .poll {
+    width: min(100%, 950px);
+    opacity: 0;
+    transform: translateY(22px) scale(.985);
+    transform-origin: center;
+    pointer-events: none;
+    transition: opacity .32s ease, transform .42s cubic-bezier(.2,.8,.2,1);
+    filter: drop-shadow(var(--shadow));
+  }
+  .poll.visible { opacity: 1; transform: translateY(0) scale(1); }
+  .shell {
+    position: relative;
+    overflow: hidden;
+    padding: 25px 28px 21px;
+    border: 1px solid rgba(83, 252, 24, .38);
+    border-radius: 24px;
+    background:
+      radial-gradient(ellipse at 0% 0%, rgba(83,252,24,.105), transparent 39%),
+      radial-gradient(ellipse at 100% 100%, rgba(115,230,255,.08), transparent 36%),
+      var(--panel);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .shell::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--green), var(--cyan), transparent);
+    opacity: .95;
+  }
+  .shell::after {
+    content: "";
+    position: absolute;
+    right: -90px;
+    top: -110px;
+    width: 250px;
+    height: 250px;
+    border: 1px solid rgba(83,252,24,.10);
+    border-radius: 50%;
+    box-shadow: 0 0 0 22px rgba(83,252,24,.025), 0 0 0 46px rgba(83,252,24,.02);
+    pointer-events: none;
+  }
+  .header, .footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    border-radius: 14px;
+    color: #071006;
+    background: var(--green);
+    box-shadow: 0 0 24px rgba(83,252,24,.18);
+  }
+  .eyebrow {
+    margin: 0 0 4px;
+    color: var(--green);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .19em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(19px, 2.2vw, 27px);
+    line-height: 1.08;
+    font-weight: 900;
+    letter-spacing: -.035em;
+  }
+  .right-head { display: flex; align-items: center; gap: 12px; }
+  .live {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .12em;
+    white-space: nowrap;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ffb648;
+    box-shadow: 0 0 12px rgba(255,182,72,.6);
+  }
+  .connected .dot { background: var(--green); box-shadow: 0 0 12px rgba(83,252,24,.65); }
+  .timer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 83px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,.04);
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: .04em;
+  }
+  .timer.urgent { color: #ffd16a; border-color: rgba(255,209,106,.45); animation: pulse .85s infinite alternate; }
+  .timer-track { height: 4px; overflow: hidden; margin: 18px 0 18px; border-radius: 99px; background: rgba(255,255,255,.08); }
+  .timer-fill { width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), var(--cyan)); transition: width .25s linear; }
+  .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .option {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    padding: 16px 15px 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+    transition: border-color .3s ease, background .3s ease, transform .3s ease, box-shadow .3s ease;
+    animation: cardIn .55s both;
+  }
+  .option:nth-child(2) { animation-delay: .08s; }
+  .option:nth-child(3) { animation-delay: .16s; }
+  .option.winner {
+    border-color: rgba(83,252,24,.88);
+    background: linear-gradient(145deg, rgba(83,252,24,.16), rgba(83,252,24,.045));
+    box-shadow: inset 0 0 0 1px rgba(83,252,24,.10), 0 0 23px rgba(83,252,24,.08);
+    transform: translateY(-2px);
+  }
+  .option.winner::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--green);
+    box-shadow: 0 0 14px var(--green);
+  }
+  .option-top { display: flex; align-items: flex-start; gap: 10px; min-height: 54px; }
+  .number {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border: 1px solid rgba(83,252,24,.32);
+    border-radius: 10px;
+    color: var(--green);
+    background: var(--green-soft);
+    font-size: 17px;
+    font-weight: 950;
+  }
+  .option.winner .number { color: #071006; background: var(--green); border-color: var(--green); }
+  .option-title {
+    flex: 1;
+    min-width: 0;
+    padding-top: 2px;
+    font-size: clamp(13px, 1.45vw, 17px);
+    line-height: 1.22;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+  }
+  .winner-tag {
+    display: none;
+    margin-top: 5px;
+    color: var(--green);
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+  }
+  .option.winner .winner-tag { display: block; }
+  .bar-area { margin-top: 15px; }
+  .bar-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 7px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 750;
+  }
+  .percentage { color: var(--white); font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .bar {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: rgba(255,255,255,.08);
+  }
+  .bar-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2fae0a, var(--green));
+    box-shadow: 0 0 16px rgba(83,252,24,.35);
+    transition: width .6s cubic-bezier(.2,.8,.2,1);
+  }
+  .option:nth-child(2) .bar-fill { background: linear-gradient(90deg, #1598bb, var(--cyan)); box-shadow: 0 0 16px rgba(115,230,255,.25); }
+  .option:nth-child(3) .bar-fill { background: linear-gradient(90deg, #8964e8, #c1a7ff); box-shadow: 0 0 16px rgba(193,167,255,.25); }
+  .option.winner .bar-fill { background: linear-gradient(90deg, #2fae0a, var(--green)); box-shadow: 0 0 18px rgba(83,252,24,.5); }
+  .footer { margin-top: 18px; color: var(--muted); font-size: 11px; }
+  .instruction { display: flex; align-items: center; gap: 8px; }
+  .keys { display: flex; gap: 4px; }
+  kbd {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgba(255,255,255,.13);
+    border-radius: 6px;
+    background: rgba(255,255,255,.06);
+    color: var(--white);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .footer-strong { color: var(--white); font-weight: 850; }
+  .brand-mark { color: var(--green); font-weight: 950; letter-spacing: .1em; font-size: 10px; }
+  .poll.results .eyebrow { color: var(--cyan); }
+  .poll.results .shell { border-color: rgba(115,230,255,.5); }
+  .poll.results .shell::before { background: linear-gradient(90deg, transparent, var(--cyan), var(--green), transparent); }
+  .poll.results .timer-fill { background: linear-gradient(90deg, var(--cyan), var(--green)); }
+  .poll.results .footer-strong { color: var(--green); }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse { from { opacity: .75; } to { opacity: 1; } }
+  @media (max-width: 680px) {
+    .shell { padding: 18px 16px 15px; border-radius: 19px; }
+    .mark { width: 36px; height: 36px; flex-basis: 36px; border-radius: 11px; }
+    .mark svg { width: 22px; height: 22px; }
+    .right-head { gap: 7px; }
+    .live { font-size: 8px; }
+    .timer { min-width: 64px; padding: 7px 8px; font-size: 15px; }
+    .options { grid-template-columns: 1fr; gap: 8px; }
+    .option { padding: 11px 12px; }
+    .option-top { min-height: 0; align-items: center; }
+    .option-title { font-size: 14px; }
+    .bar-area { margin-top: 10px; }
+    .bar-labels { margin-bottom: 5px; }
+    .footer { margin-top: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<main id="poll" class="poll" aria-live="polite">
+  <section class="shell">
+    <header class="header">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <svg width="27" height="27" viewBox="0 0 32 32" fill="none">
+            <path d="M7 5h18a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H17l-6 5v-5H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M11 12h10M11 16h7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <p id="eyebrow" class="eyebrow">VOTACIÓN EN VIVO</p>
+          <h1 id="headline">¿Qué caos sigue?</h1>
+        </div>
+      </div>
+      <div class="right-head">
+        <div id="liveStatus" class="live"><span class="dot"></span><span id="liveText">CONECTANDO</span></div>
+        <div id="timer" class="timer">00:30</div>
+      </div>
+    </header>
+    <div class="timer-track"><div id="timerFill" class="timer-fill"></div></div>
+    <div id="options" class="options">
+      <article class="option" data-option="0">
+        <div class="option-top"><div class="number">1</div><div class="option-title"><span class="name">Esperando opciones…</span><span class="winner-tag">★ SELECCIONADO</span></div></div>
+        <div class="bar-area"><div class="bar-labels"><span class="votes">0 votos</span><span class="percentage">0%</span></div><div class="bar"><div class="bar-fill"></div></div></div>
+      </article>
+      <article class="option" data-option="1">
+        <div class="option-top"><div class="number">2</div><div class="option-title"><span class="name">Esperando opciones…</span><span class="winner-tag">★ SELECCIONADO</span></div></div>
+        <div class="bar-area"><div class="bar-labels"><span class="votes">0 votos</span><span class="percentage">0%</span></div><div class="bar"><div class="bar-fill"></div></div></div>
+      </article>
+      <article class="option" data-option="2">
+        <div class="option-top"><div class="number">3</div><div class="option-title"><span class="name">Esperando opciones…</span><span class="winner-tag">★ SELECCIONADO</span></div></div>
+        <div class="bar-area"><div class="bar-labels"><span class="votes">0 votos</span><span class="percentage">0%</span></div><div class="bar"><div class="bar-fill"></div></div></div>
+      </article>
+    </div>
+    <footer class="footer">
+      <div id="instruction" class="instruction">
+        <span class="footer-strong">Votá en el chat</span>
+        <span>Escribí</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>
+      </div>
+      <div class="brand-mark">GTA CHAOS MOD</div>
+    </footer>
+  </section>
+</main>
+<script>
+(() => {
+  "use strict";
+
+  const params = new URLSearchParams(window.location.search);
+  const portValue = Number(params.get("port") || 42069);
+  const port = Number.isInteger(portValue) && portValue >= 1 && portValue <= 65535 ? portValue : 42069;
+  const host = params.get("host") || "127.0.0.1";
+
+  const poll = document.getElementById("poll");
+  const eyebrow = document.getElementById("eyebrow");
+  const headline = document.getElementById("headline");
+  const timer = document.getElementById("timer");
+  const timerFill = document.getElementById("timerFill");
+  const liveStatus = document.getElementById("liveStatus");
+  const liveText = document.getElementById("liveText");
+  const instruction = document.getElementById("instruction");
+  const cards = Array.from(document.querySelectorAll(".option"));
+
+  let socket = null;
+  let reconnectTimer = null;
+  let currentMode = "";
+  let lastVoteData = null;
+  let isResult = false;
+  let resultTimeout = null;
+  let remainingMs = 30000;
+  let totalMs = 30000;
+
+  const setConnection = connected => {
+    liveStatus.classList.toggle("connected", connected);
+    liveText.textContent = connected ? "CONECTADO" : "SIN CONEXIÓN";
+  };
+
+  const formatTime = ms => {
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    return String(Math.floor(totalSeconds / 60)).padStart(2, "0") + ":" +
+      String(totalSeconds % 60).padStart(2, "0");
+  };
+
+  const updateTimer = () => {
+    timer.textContent = formatTime(remainingMs);
+    timer.classList.toggle("urgent", !isResult && remainingMs <= 10000 && currentMode.toLowerCase() === "voting");
+    timerFill.style.width = (totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) * 100 : 0) + "%";
+  };
+
+  const showPoll = () => poll.classList.add("visible");
+  const hidePoll = () => {
+    poll.classList.remove("visible");
+    poll.classList.remove("results");
+  };
+
+  const renderVotes = data => {
+    lastVoteData = data;
+    const names = Array.isArray(data.effects) ? data.effects : [];
+    const voteCounts = Array.isArray(data.votes) ? data.votes.map(v => Math.max(0, Number(v) || 0)) : [0, 0, 0];
+    const totalVotes = voteCounts.reduce((sum, value) => sum + value, 0);
+    const pickedChoice = Number(data.pickedChoice);
+    isResult = Number.isFinite(pickedChoice) && pickedChoice !== -1 && pickedChoice !== 0;
+
+    if (resultTimeout) {
+      clearTimeout(resultTimeout);
+      resultTimeout = null;
+    }
+
+    cards.forEach((card, index) => {
+      const name = names[index] == null || String(names[index]).trim() === "" ? "Opción " + (index + 1) : String(names[index]);
+      const votes = voteCounts[index] || 0;
+      const percent = totalVotes > 0 ? Math.round(votes / totalVotes * 100) : 0;
+      const isWinner = isResult && (pickedChoice & (1 << index)) !== 0;
+
+      card.querySelector(".name").textContent = name;
+      card.querySelector(".votes").textContent = votes + (votes === 1 ? " voto" : " votos");
+      card.querySelector(".percentage").textContent = percent + "%";
+      card.querySelector(".bar-fill").style.width = percent + "%";
+      card.classList.toggle("winner", isWinner);
+    });
+
+    if (isResult) {
+      poll.classList.add("results", "visible");
+      eyebrow.textContent = "RESULTADO DE LA VOTACIÓN";
+      headline.textContent = "¡El chat decidió!";
+      instruction.innerHTML = '<span class="footer-strong">Efecto(s) seleccionado(s)</span><span>La votación terminó</span>';
+      resultTimeout = setTimeout(() => {
+        if (currentMode.toLowerCase() !== "voting") hidePoll();
+      }, 9000);
+    } else if (currentMode.toLowerCase() === "voting") {
+      poll.classList.remove("results");
+      poll.classList.add("visible");
+      eyebrow.textContent = "VOTACIÓN EN VIVO";
+      headline.textContent = "¿Qué caos sigue?";
+      instruction.innerHTML = '<span class="footer-strong">Votá en el chat</span><span>Escribí</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>';
+    }
+  };
+
+  const handleTime = data => {
+    if (typeof data.remaining === "number") remainingMs = Math.max(0, data.remaining);
+    if (typeof data.cooldown === "number" && data.cooldown > 0) totalMs = data.cooldown;
+    const nextMode = String(data.mode || currentMode);
+    const previousMode = currentMode;
+    currentMode = nextMode;
+    const normalized = currentMode.toLowerCase();
+
+    if (normalized === "voting") {
+      if (previousMode.toLowerCase() !== "voting") {
+        isResult = false;
+        if (resultTimeout) { clearTimeout(resultTimeout); resultTimeout = null; }
+      }
+      if (lastVoteData) renderVotes(lastVoteData);
+      else {
+        poll.classList.remove("results");
+        eyebrow.textContent = "VOTACIÓN EN VIVO";
+        headline.textContent = "¿Qué caos sigue?";
+        showPoll();
+      }
+    } else if (normalized === "cooldown" || normalized === "rapid-fire" || normalized === "error") {
+      if (!isResult) hidePoll();
+    }
+
+    updateTimer();
+  };
+
+  const handleMessage = raw => {
+    let message;
+    try { message = JSON.parse(raw); } catch (_) { return; }
+    if (!message || typeof message !== "object") return;
+    const data = message.data || {};
+
+    if (message.type === "time") {
+      handleTime(data);
+    } else if (message.type === "obs-votes") {
+      renderVotes(data);
+      if (isResult) updateTimer();
+    }
+  };
+
+  const connect = () => {
+    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+    try {
+      socket = new WebSocket("ws://" + host + ":" + port);
+      socket.onopen = () => {
+        setConnection(true);
+        try { socket.send(JSON.stringify({ type: "obs-overlay", state: "active" })); } catch (_) {}
+      };
+      socket.onmessage = event => handleMessage(event.data);
+      socket.onerror = () => setConnection(false);
+      socket.onclose = () => {
+        setConnection(false);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 1800);
+      };
+    } catch (_) {
+      setConnection(false);
+      reconnectTimer = setTimeout(connect, 1800);
+    }
+  };
+
+  window.addEventListener("beforeunload", () => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      try { socket.send(JSON.stringify({ type: "obs-overlay", state: "inactive" })); } catch (_) {}
+      try { socket.close(); } catch (_) {}
+    }
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (resultTimeout) clearTimeout(resultTimeout);
+  });
+
+  updateTimer();
+  connect();
+})();
+</script>
+</body>
+</html>
