@@ -32,6 +32,7 @@ jobs:
           Copy-Item "gui-kick-patch/GTAChaos/Form1.cs" "$root/GTAChaos/Form1.cs" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/effects/abstract/AbstractEffect.cs" "$root/GTAChaos/src/effects/abstract/AbstractEffect.cs" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/utils/Config.cs" "$root/GTAChaos/src/utils/Config.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/WebsocketHandler.cs" "$root/GTAChaos/src/utils/WebsocketHandler.cs" -Force
           Copy-Item "gui-kick-patch/GTAChaos/GTAChaos.csproj" "$root/GTAChaos/GTAChaos.csproj" -Force
           Copy-Item "gui-kick-patch/GTAChaos/packages.config" "$root/GTAChaos/packages.config" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/StreamHandler.cs" "$root/GTAChaos/src/utils/stream/StreamHandler.cs" -Force
