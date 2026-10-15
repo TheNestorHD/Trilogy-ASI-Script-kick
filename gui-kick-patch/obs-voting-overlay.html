@@ -8,160 +8,92 @@
   :root {
     --green: #53fc18;
     --white: #f4f6f8;
-    --muted: #a3adb7;
-    --panel: rgba(12, 15, 18, .94);
-    --line: rgba(255, 255, 255, .13);
+    --muted: #b3bbc3;
+    --card: rgba(12, 15, 18, .94);
+    --line: rgba(255, 255, 255, .16);
   }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: transparent;
-    color: var(--white);
+    margin: 0; width: 100%; height: 100%; overflow: hidden;
+    background: transparent; color: var(--white);
     font-family: Inter, "Segoe UI", Arial, sans-serif;
   }
-  body { display: flex; align-items: center; justify-content: center; padding: 10px; }
+  body { display: flex; align-items: center; justify-content: center; padding: 8px; }
   .poll {
-    width: min(100%, 920px);
-    opacity: 0;
-    transform: translateY(9px);
+    width: min(100%, 1000px);
+    opacity: 0; transform: translateY(5px);
     pointer-events: none;
-    transition: opacity .22s ease, transform .25s ease;
-    filter: drop-shadow(0 12px 30px rgba(0, 0, 0, .25));
+    transition: opacity .2s ease, transform .2s ease;
+    filter: drop-shadow(0 5px 15px rgba(0,0,0,.22));
   }
   .poll.visible { opacity: 1; transform: translateY(0); }
-  .shell {
-    position: relative;
-    overflow: hidden;
-    padding: 20px 22px 15px;
-    border: 1px solid rgba(255, 255, 255, .14);
-    border-radius: 15px;
-    background: var(--panel);
-  }
-  .shell::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto;
-    height: 2px;
-    background: var(--green);
-  }
-  .shell::after, .mark, .brand-mark { display: none; }
-  .header, .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .shell { padding: 0; border: 0; background: transparent; overflow: visible; }
+  .shell::before, .shell::after, .header, .timer-track, .mark, .brand-mark { display: none; }
+  .header, .footer { align-items: center; justify-content: center; gap: 10px; }
   .brand { display: block; min-width: 0; }
-  .eyebrow {
-    margin: 0 0 5px;
-    color: var(--green);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-  }
-  h1 {
-    margin: 0;
-    font-size: clamp(19px, 2.1vw, 25px);
-    line-height: 1.12;
-    font-weight: 800;
-    letter-spacing: -.025em;
-  }
-  .right-head { display: flex; align-items: center; gap: 10px; }
-  .live { display: flex; align-items: center; gap: 6px; }
-  #liveText { display: none; }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: #8b949e; }
-  .connected .dot { background: var(--green); }
-  .timer {
-    min-width: 54px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--green);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: .02em;
-  }
-  .timer.urgent { color: #ffd166; }
-  .timer-track { height: 3px; overflow: hidden; margin: 15px 0 13px; border-radius: 99px; background: rgba(255,255,255,.10); }
-  .timer-fill { width: 100%; height: 100%; border-radius: inherit; background: var(--green); transition: width .25s linear; }
-  .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .eyebrow, h1 { display: none; }
+  .right-head { display: none; }
+  .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .option {
-    min-width: 0;
-    overflow: hidden;
-    padding: 14px 14px 12px;
-    border: 1px solid var(--line);
-    border-radius: 11px;
-    background: rgba(255,255,255,.035);
-    transition: border-color .22s ease, background .22s ease;
-    animation: cardIn .28s both;
+    min-width: 0; overflow: hidden; padding: 16px;
+    border: 1px solid var(--line); border-radius: 11px;
+    background: var(--card);
+    transition: border-color .2s ease, background .2s ease;
+    animation: cardIn .24s both;
   }
-  .option:nth-child(2) { animation-delay: .035s; }
-  .option:nth-child(3) { animation-delay: .07s; }
-  .option.winner {
-    border-color: rgba(83,252,24,.72);
-    background: rgba(83,252,24,.075);
-  }
+  .option:nth-child(2) { animation-delay: .03s; }
+  .option:nth-child(3) { animation-delay: .06s; }
+  .option.winner { border-color: rgba(83,252,24,.75); background: rgba(12,22,10,.96); }
   .option-top { display: flex; align-items: flex-start; gap: 9px; min-height: 44px; }
   .number {
-    display: grid;
-    place-items: center;
-    width: 27px;
-    height: 27px;
-    flex: 0 0 27px;
-    border-radius: 7px;
-    color: var(--muted);
-    background: rgba(255,255,255,.07);
-    font-size: 13px;
-    font-weight: 800;
+    display: grid; place-items: center; width: 25px; height: 25px; flex: 0 0 25px;
+    border-radius: 6px; color: var(--green); background: rgba(83,252,24,.12);
+    font-size: 12px; font-weight: 800;
   }
-  .option.winner .number { color: #071006; background: var(--green); }
-  .option-title { flex: 1; min-width: 0; padding-top: 2px; font-size: clamp(13px, 1.35vw, 16px); line-height: 1.25; font-weight: 750; overflow-wrap: anywhere; }
+  .option.winner .number { color: #081006; background: var(--green); }
+  .option-title {
+    flex: 1; min-width: 0; padding-top: 2px;
+    font-size: clamp(13px, 1.45vw, 17px); line-height: 1.25;
+    font-weight: 750; overflow-wrap: anywhere;
+  }
   .winner-tag {
-    display: none;
-    margin-top: 5px;
-    color: var(--green);
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    display: none; margin-top: 4px; color: var(--green);
+    font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   }
   .option.winner .winner-tag { display: block; }
-  .bar-area { margin-top: 12px; }
-  .bar-labels { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 650; }
-  .percentage { color: var(--white); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .bar { height: 5px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.09); }
-  .bar-fill { width: 0; height: 100%; border-radius: inherit; background: rgba(83,252,24,.62); transition: width .45s ease; }
+  .bar-area { margin-top: 14px; }
+  .bar-labels {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 650;
+  }
+  .percentage { display: none; }
+  .bar { height: 6px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.12); }
+  .bar-fill { width: 0; height: 100%; border-radius: inherit; background: rgba(83,252,24,.72); transition: width .35s ease; }
   .option.winner .bar-fill { background: var(--green); }
-  .footer { margin-top: 12px; color: var(--muted); font-size: 11px; }
-  .instruction { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .footer {
+    display: flex; margin-top: 9px; padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,.12); border-radius: 8px;
+    background: rgba(12,15,18,.9); color: var(--white);
+    font-size: 11px; text-align: center;
+  }
+  .instruction { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; }
+  .footer-strong { color: var(--green); font-weight: 800; }
   .keys { display: inline-flex; gap: 4px; }
   kbd {
-    display: grid;
-    place-items: center;
-    width: 19px;
-    height: 19px;
-    border: 1px solid rgba(255,255,255,.15);
-    border-radius: 4px;
-    background: rgba(255,255,255,.055);
-    color: var(--white);
-    font-family: inherit;
-    font-size: 10px;
-    font-weight: 800;
+    display: grid; place-items: center; width: 18px; height: 18px;
+    border: 1px solid rgba(255,255,255,.17); border-radius: 4px;
+    background: rgba(255,255,255,.06); color: var(--white);
+    font-family: inherit; font-size: 10px; font-weight: 800;
   }
-  .footer-strong { color: var(--white); font-weight: 750; }
-  .poll.results .eyebrow { color: var(--muted); }
-  .poll.results .shell::before { background: var(--green); }
-  .poll.results .timer-fill { background: var(--green); }
-  @keyframes cardIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
   @media (max-width: 600px) {
-    .shell { padding: 16px 14px 12px; border-radius: 12px; }
     .options { grid-template-columns: 1fr; gap: 7px; }
-    .option { padding: 10px 11px; }
+    .option { padding: 10px 12px; }
     .option-top { min-height: 0; align-items: center; }
-    .option-title { font-size: 14px; }
     .bar-area { margin-top: 8px; }
-    .footer { margin-top: 10px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -206,8 +138,8 @@
     </div>
     <footer class="footer">
       <div id="instruction" class="instruction">
-        <span class="footer-strong">Votá en el chat</span>
-        <span>Escribí</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>
+        <span class="footer-strong">Votá en el chat de Kick</span>
+        <span>con</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>
       </div>
       <div class="brand-mark">GTA CHAOS MOD</div>
     </footer>
@@ -294,7 +226,7 @@
       poll.classList.add("results", "visible");
       eyebrow.textContent = "RESULTADO DE LA VOTACIÓN";
       headline.textContent = "¡El chat decidió!";
-      instruction.innerHTML = '<span class="footer-strong">Efecto(s) seleccionado(s)</span><span>La votación terminó</span>';
+      instruction.innerHTML = '<span class="footer-strong">Votá en el chat de Kick</span><span>con</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>';
       resultTimeout = setTimeout(() => {
         if (currentMode.toLowerCase() !== "voting") hidePoll();
       }, 9000);
@@ -303,7 +235,7 @@
       poll.classList.add("visible");
       eyebrow.textContent = "VOTACIÓN EN VIVO";
       headline.textContent = "¿Qué caos sigue?";
-      instruction.innerHTML = '<span class="footer-strong">Votá en el chat</span><span>Escribí</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>';
+      instruction.innerHTML = '<span class="footer-strong">Votá en el chat de Kick</span><span>con</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>';
     }
   };
 
