@@ -76,7 +76,7 @@ namespace GTAChaos.Effects
                         continue;
 
                     string id = effect.GetID();
-                    string name = effect.GetDisplayName(DisplayNameType.UI);
+                    string name = effect.GetOriginalDisplayName(DisplayNameType.UI);
 
                     if (!Settings.TryGetValue(id, out EffectDurationSetting setting))
                     {
