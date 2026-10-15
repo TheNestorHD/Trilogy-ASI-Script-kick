@@ -9,3 +9,14 @@ Kick mode opens the channel page in an embedded Microsoft Edge WebView2 window a
 This path does not open a separate raw Pusher WebSocket, ask the user to inspect developer tools, or require an Access Token just to read public chat. The app requires the Microsoft Edge WebView2 Runtime to be installed. If Kick changes the DOM structure of its chat panel, the selectors in `KickChatConnection.cs` may need an update.
 
 The browser reader intentionally does not replay existing chat history as new votes when it first attaches. It reads new messages as they appear after the chat container is found.
+
+## Per-effect duration settings
+
+On first launch, the GUI creates `effect_durations.json` beside `GTAChaos.exe`. It lists each effect ID with a human-readable `name` and a `duration_seconds` field.
+
+- Leave `duration_seconds` as `null` to use that effect's normal duration.
+- Set it to a number, for example `12`, to override that effect to 12 seconds.
+- In stream mode, the final duration sent to the game is always capped at 30 seconds, including effects with built-in durations or multipliers.
+- Restart the GUI after editing the JSON file.
+
+The generated file is merged with the current effect list on startup, so newly added effects are added automatically while existing duration choices are preserved.
