@@ -83,12 +83,12 @@ namespace GTAChaos.Utils
         {
             if (Shared.IsStreamMode)
             {
-                // Keep streamed effects active for a variable part of one full voting cycle.
-                // Never let an effect exceed voting time + cooldown, and keep a 30-second minimum.
-                int cycleDuration = Math.Max(
-                    1000 * 30,
-                    Instance().StreamVotingCooldown + Instance().StreamVotingTime);
-                return RandomHandler.Next(1000 * 30, cycleDuration);
+                // Effects are activated when voting ends, so the cooldown is the time
+                // available for them to finish before the next voting phase begins.
+                // Keep 30 seconds as the minimum unless a shorter debug cooldown is configured.
+                int cooldownDuration = Math.Max(0, Instance().StreamVotingCooldown);
+                int minimumDuration = Math.Min(1000 * 30, cooldownDuration);
+                return RandomHandler.Next(minimumDuration, cooldownDuration);
             }
 
             return Instance().MainCooldown;
