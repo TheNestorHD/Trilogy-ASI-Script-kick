@@ -19,6 +19,55 @@ DrawVoting::DrawVotes ()
     for (int i = 0; i < 3; i++)
         DrawVote (i);
 
+    // Explicitly list every winning option when multiple effects are selected.
+    // The regular vote labels remain visible and highlighted as before.
+    if (drawRemaining > 0 && pickedVote != UNDETERMINED)
+    {
+        int selectedCount = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            if (pickedVote & GetVoteChoice (i))
+                selectedCount++;
+        }
+
+        if (selectedCount > 1)
+        {
+            bool drawVotesOnTop = CONFIG ("Drawing.DrawVotesOnTop", false);
+            float headerY = drawVotesOnTop
+                                ? SCREEN_COORD_BOTTOM (105.0f)
+                                : SCREEN_COORD_TOP (105.0f);
+            float rowStep = SCREEN_COORD (22.0f);
+            CRGBA selectedColor = color::White;
+
+            gamefont::PrintUnscaled ("Activated effects:", SCREEN_COORD_CENTER_X,
+                                     headerY, FONT_DEFAULT,
+                                     SCREEN_MULTIPLIER (0.5f),
+                                     SCREEN_MULTIPLIER (0.7f), selectedColor,
+                                     gamefont::AlignCenter, 1, color::Black, true);
+
+            int row = 1;
+            for (int i = 0; i < 3; i++)
+            {
+                if (!(pickedVote & GetVoteChoice (i)))
+                    continue;
+
+                std::string description
+                    = Globals::enabledEffects["replace_all_text"]
+                          ? Globals::replaceAllTextString
+                          : votes[i].description;
+                float y = drawVotesOnTop
+                              ? SCREEN_COORD_BOTTOM (105.0f) + rowStep * row
+                              : SCREEN_COORD_TOP (105.0f) + rowStep * row;
+
+                gamefont::PrintUnscaled (description, SCREEN_COORD_CENTER_X, y,
+                                         FONT_DEFAULT, SCREEN_MULTIPLIER (0.5f),
+                                         SCREEN_MULTIPLIER (0.7f), selectedColor,
+                                         gamefont::AlignCenter, 1, color::Black, true);
+                row++;
+            }
+        }
+    }
+
     if (drawRemaining > 0)
     {
         // Make sure to bring back the picked one
