@@ -389,7 +389,7 @@ namespace GTAChaos.Utils
                 /deleted by a moderator/i.test(rawText)) continue;
             if (seenPopoutRows.get(row) === rawText) continue;
 
-            // Current popout rows can render as plain text, e.g. "11:17 PMname: 3".
+            // Current popout rows can render as plain text with a timestamp followed by username and message.
             const withoutTimestamp = rawText
                 .replace(/^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*/i, '')
                 .trim();
