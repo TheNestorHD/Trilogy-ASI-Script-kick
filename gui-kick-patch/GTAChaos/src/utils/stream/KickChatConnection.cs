@@ -647,15 +647,24 @@ namespace GTAChaos.Utils
                 return;
             }
 
-            this.effectVoting.GetVotes(out string[] effects, out int[] votes, undetermined);
+            // Keep the real option names for the OBS browser overlay, while preparing
+            // a separate vote payload for the in-game overlay.
+            this.effectVoting.GetVotes(out string[] realEffects, out int[] votes, false);
+            WebsocketHandler.INSTANCE.SendOverlayVotes(realEffects, votes, this.lastChoice);
+
+            bool concealForObs = WebsocketHandler.INSTANCE.IsObsVotingOverlayActive;
+            bool concealForSetting = undetermined && Config.Instance().StreamHideVotingEffectsIngame;
+            string[] gameEffects = (concealForObs || concealForSetting)
+                ? realEffects.Select(_ => "???").ToArray()
+                : realEffects;
 
             if (Shared.Sync != null)
             {
-                Shared.Sync.SendVotes(effects, votes, this.lastChoice, !undetermined);
+                Shared.Sync.SendVotes(gameEffects, votes, this.lastChoice, !undetermined);
             }
             else
             {
-                WebsocketHandler.INSTANCE.SendVotes(effects, votes, this.lastChoice);
+                WebsocketHandler.INSTANCE.SendVotes(gameEffects, votes, this.lastChoice);
             }
         }
 
@@ -791,9 +800,6 @@ namespace GTAChaos.Utils
 
             public void GetVotes(out string[] effects, out int[] votes, bool undetermined = false)
             {
-                // We aren't posting effects to YouTube chat so we can't hide them ingame
-                undetermined = false;
-
                 ChatVotingElement[] votingElements = this.GetVotingElements().ToArray();
 
                 effects = new string[]
