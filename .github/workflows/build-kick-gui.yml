@@ -31,6 +31,7 @@ jobs:
           $root = Join-Path $env:GITHUB_WORKSPACE "gui-source"
           Copy-Item "gui-kick-patch/GTAChaos/Form1.cs" "$root/GTAChaos/Form1.cs" -Force
           Copy-Item "gui-kick-patch/GTAChaos/GTAChaos.csproj" "$root/GTAChaos/GTAChaos.csproj" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/packages.config" "$root/GTAChaos/packages.config" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/StreamHandler.cs" "$root/GTAChaos/src/utils/stream/StreamHandler.cs" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/KickChatConnection.cs" "$root/GTAChaos/src/utils/stream/KickChatConnection.cs" -Force
           Copy-Item "gui-kick-patch/UPSTREAM.md" "$root/KICK_CHAT_README.md" -Force
