@@ -303,9 +303,14 @@ namespace GTAChaos.Utils
         '#chatroom [data-testid=""chatroom""]',
         '#channel-chatroom',
         '[data-testid=""chatroom""]',
-        '#chatroom'
+        '#chatroom',
+        '.overflow-y-scroll',
+        '[class*=""chatroom""]'
     ];
     const seenContent = new WeakSet();
+    // Popout chat uses virtualized [data-index] rows on current Kick layouts.
+    // WeakMap fingerprints let a recycled row emit a new message when its text changes.
+    const seenPopoutRows = new WeakMap();
     let messageSequence = 0;
     let attempts = 0;
 
@@ -364,9 +369,51 @@ namespace GTAChaos.Utils
         }
     };
 
+    const processPopoutRows = (root, container) => {
+        if (!root || root.nodeType !== 1) return;
+        const rows = [];
+        if (root.matches && root.matches('[data-index]')) rows.push(root);
+        if (root.querySelectorAll) {
+            root.querySelectorAll('[data-index]').forEach(row => rows.push(row));
+        }
+
+        for (const row of rows) {
+            // Legacy markup is handled above using .chat-entry-content.
+            if (row.querySelector && row.querySelector('.chat-entry-content')) continue;
+
+            const rawText = (row.innerText || row.textContent || '')
+                .replace(/\u00a0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!rawText || /^new messages$/i.test(rawText) ||
+                /deleted by a moderator/i.test(rawText)) continue;
+            if (seenPopoutRows.get(row) === rawText) continue;
+
+            // Current popout rows can render as plain text, e.g. "11:17 PMname: 3".
+            const withoutTimestamp = rawText
+                .replace(/^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*/i, '')
+                .trim();
+            const match = withoutTimestamp.match(/^([^:]{1,80}):\s*(.*)$/);
+            if (!match) continue;
+
+            const username = match[1].trim();
+            const content = match[2].trim();
+            if (!username || !content) continue;
+
+            seenPopoutRows.set(row, rawText);
+            send({
+                type: 'chat-message',
+                id: 'kick-popout-' + Date.now() + '-' + (++messageSequence),
+                username,
+                content
+            });
+        }
+    };
+
     const scanAddedNode = (node, container) => {
         if (!node || node.nodeType !== 1) return;
         processTree(node, container);
+        processPopoutRows(node, container);
 
         // Some React updates insert the username and text in separate steps.
         // Scan their small common ancestors, but never the whole chat container,
@@ -375,6 +422,7 @@ namespace GTAChaos.Utils
         let depth = 0;
         while (parent && parent !== container && depth < 6) {
             processTree(parent, container);
+            processPopoutRows(parent, container);
             parent = parent.parentElement;
             depth++;
         }
@@ -398,9 +446,21 @@ namespace GTAChaos.Utils
         const observer = new MutationObserver(mutations => {
             for (const mutation of mutations) {
                 for (const node of mutation.addedNodes) scanAddedNode(node, container);
+
+                // Kick can recycle a virtualized row by changing its text or data-index.
+                if (mutation.type === 'characterData') {
+                    scanAddedNode(mutation.target.parentElement, container);
+                } else if (mutation.type === 'attributes') {
+                    scanAddedNode(mutation.target, container);
+                }
             }
         });
-        observer.observe(container, { childList: true, subtree: true });
+        observer.observe(container, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true
+        });
         send({ type: 'chat-ready' });
     };
 
@@ -512,7 +572,12 @@ namespace GTAChaos.Utils
                 if (choice is >= 0 and <= 2)
                 {
                     this.effectVoting?.TryAddVote(username, choice);
-                    // Refresh the in-game voting overlay immediately after every accepted vote.
+                    string[] effects;
+                    int[] votes;
+                    this.effectVoting.GetVotes(out effects, out votes);
+                    Debug.WriteLine($"[Kick] Accepted vote: {username} -> option {choice + 1}. " +
+                        $"Counts: 1={votes[0]}, 2={votes[1]}, 3={votes[2]}");
+                    // Push the updated totals to the in-game overlay immediately.
                     this.SendEffectVotingToGame();
                 }
             }
