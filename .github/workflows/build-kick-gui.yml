@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/kick-chat-gui-recovery
+      - feature/obs-voting-overlay
     paths:
       - "gui-kick-patch/**"
       - ".github/workflows/build-kick-gui.yml"
