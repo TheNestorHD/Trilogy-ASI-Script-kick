@@ -42,6 +42,18 @@ namespace GTAChaos.Utils
         private WebSocketServer server;
         private readonly List<IWebSocketConnection> sockets = new();
         private readonly List<string> socketBuffer = new();
+        private readonly object overlayLock = new();
+        private readonly HashSet<IWebSocketConnection> obsOverlaySockets = new();
+
+        /// <summary>True while at least one OBS voting overlay is connected.</summary>
+        public bool IsObsVotingOverlayActive
+        {
+            get
+            {
+                lock (this.overlayLock)
+                    return this.obsOverlaySockets.Count > 0;
+            }
+        }
 
         public void CreateWebsocketServer()
         {
@@ -68,14 +80,49 @@ namespace GTAChaos.Utils
                     this.sockets.Add(socket);
                     this.SendWebsocketBuffer();
                 };
-                socket.OnClose = () => this.sockets.Remove(socket);
+                socket.OnClose = () => this.RemoveSocket(socket);
                 socket.OnError = error =>
                 {
-                    this.sockets.Remove(socket);
+                    this.RemoveSocket(socket);
                     socket.Close();
                 };
-                socket.OnMessage = message => OnSocketMessage?.Invoke(this, new SocketMessageEventArgs { Data = message });
+                socket.OnMessage = message => this.HandleClientMessage(socket, message);
             });
+        }
+
+        private void HandleClientMessage(IWebSocketConnection socket, string message)
+        {
+            // The OBS browser source announces itself so the game can conceal option names.
+            // Socket close/error handling removes it from the active set automatically.
+            try
+            {
+                JObject json = JObject.Parse(message);
+                if (string.Equals(json["type"]?.ToString(), "obs-overlay", StringComparison.OrdinalIgnoreCase))
+                {
+                    string state = json["state"]?.ToString() ?? string.Empty;
+                    lock (this.overlayLock)
+                    {
+                        if (string.Equals(state, "active", StringComparison.OrdinalIgnoreCase))
+                            this.obsOverlaySockets.Add(socket);
+                        else
+                            this.obsOverlaySockets.Remove(socket);
+                    }
+                    return;
+                }
+            }
+            catch
+            {
+                // Preserve the existing message event behavior for non-overlay clients.
+            }
+
+            OnSocketMessage?.Invoke(this, new SocketMessageEventArgs { Data = message });
+        }
+
+        private void RemoveSocket(IWebSocketConnection socket)
+        {
+            this.sockets.Remove(socket);
+            lock (this.overlayLock)
+                this.obsOverlaySockets.Remove(socket);
         }
 
         public bool CheckIfPortAvailable(int port)
@@ -159,6 +206,29 @@ namespace GTAChaos.Utils
             JObject jsonObject = JObject.FromObject(new
             {
                 type = "votes",
+                data = new
+                {
+                    effects,
+                    votes,
+                    pickedChoice
+                }
+            });
+
+            this.SendDataToWebsocket(jsonObject);
+        }
+
+        /// <summary>
+        /// Sends unredacted option names only to an active OBS overlay. The regular
+        /// "votes" event may intentionally contain ??? while the overlay is connected.
+        /// </summary>
+        public void SendOverlayVotes(string[] effects, int[] votes, VoteChoice pickedChoice = VoteChoice.UNDETERMINED)
+        {
+            if (!this.IsObsVotingOverlayActive)
+                return;
+
+            JObject jsonObject = JObject.FromObject(new
+            {
+                type = "obs-votes",
                 data = new
                 {
                     effects,
