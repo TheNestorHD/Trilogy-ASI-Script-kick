@@ -12,14 +12,25 @@ The browser reader intentionally does not replay existing chat history as new vo
 
 ## Per-effect duration settings
 
-On first launch, the GUI creates `effect_durations.json` beside `GTAChaos.exe`. It lists each effect ID with a human-readable `name` and a `duration_seconds` field.
+On first launch, the GUI creates `effect_durations.json` beside `GTAChaos.exe`. Each effect ID has a `name` and a `duration_seconds` field.
 
+- Edit `name` to customize the effect's display name. The custom name is used in the OBS voting overlay and wherever the game/GUI displays that effect's name.
 - Leave `duration_seconds` as `null` to use that effect's normal duration.
-- Set it to a number, for example `12`, to override that effect to 12 seconds.
+- Set `duration_seconds` to a number, for example `12`, to override that effect to 12 seconds.
 - In stream mode, the final duration sent to the game is always capped at 30 seconds, including effects with built-in durations or multipliers.
-- Restart the GUI after editing the JSON file.
+- Restart the GUI after editing the JSON file so the changes are loaded.
 
-The generated file is merged with the current effect list on startup, so newly added effects are added automatically while existing duration choices are preserved.
+Example:
+```json
+{
+  "effect_example": {
+    "name": "¡Modo caos total!",
+    "duration_seconds": 12
+  }
+}
+```
+
+The generated file is merged with the current effect list on startup, so newly added effects are added automatically while existing custom names and duration choices are preserved.
 
 ## Animated OBS voting overlay
 
