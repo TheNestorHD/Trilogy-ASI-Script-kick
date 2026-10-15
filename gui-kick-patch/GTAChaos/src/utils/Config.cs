@@ -88,7 +88,7 @@ namespace GTAChaos.Utils
                 int cycleDuration = Math.Max(
                     1000 * 30,
                     Instance().StreamVotingCooldown + Instance().StreamVotingTime);
-                return RandomHandler.Next(1000 * 30, cycleDuration + 1);
+                return RandomHandler.Next(1000 * 30, cycleDuration);
             }
 
             return Instance().MainCooldown;
