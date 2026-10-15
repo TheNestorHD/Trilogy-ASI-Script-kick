@@ -209,6 +209,10 @@ namespace GTAChaos.Utils
             {
                 try
                 {
+                    // Check Runtime separately so missing Runtime and missing loader
+                    // report different errors instead of the same generic message.
+                    string browserVersion = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                    Debug.WriteLine("WebView2 browser runtime: " + browserVersion);
                     await this.webView.EnsureCoreWebView2Async();
 
                     this.webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
@@ -223,10 +227,20 @@ namespace GTAChaos.Utils
                 }
                 catch (Exception ex)
                 {
+                    Exception root = ex.GetBaseException();
+                    string exceptionType = root.GetType().FullName ?? root.GetType().Name;
+                    string hresult = "0x" + root.HResult.ToString("X8");
+                    bool runtimeMissing = exceptionType.IndexOf(
+                        "WebView2RuntimeNotFoundException", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    string explanation = runtimeMissing
+                        ? "No se encontró Microsoft Edge WebView2 Runtime en este equipo."
+                        : "No se pudo inicializar WebView2. Puede faltar el Runtime o el cargador nativo.";
+
                     this.ShowBrowserError(
-                        "No se pudo iniciar el navegador integrado. " +
-                        "Verificá que Microsoft Edge WebView2 Runtime esté instalado. " +
-                        ex.GetBaseException().Message);
+                        explanation + Environment.NewLine + Environment.NewLine +
+                        "Detalle técnico: " + exceptionType + " (" + hresult + ")" +
+                        Environment.NewLine + root.Message);
                 }
             }
 
