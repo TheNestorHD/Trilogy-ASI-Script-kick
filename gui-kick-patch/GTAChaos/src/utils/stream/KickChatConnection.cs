@@ -1,12 +1,12 @@
-using Flurl.Http;
 using GTAChaos.Effects;
 using Newtonsoft.Json.Linq;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using System.Windows.Forms;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Net.WebSockets;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,38 +19,17 @@ namespace GTAChaos.Utils
     /// </summary>
     public class KickChatConnection : IStreamConnection
     {
-        // Kick's public Pusher key is unofficial and the cluster can change.
-        // Probe only clusters documented by Pusher. In particular, "us1" is not
-        // a public Pusher Channels cluster and its hostname does not resolve.
-        private const string PusherAppKey = "32cbd69e4b950bf97679";
-        private const string PusherClientVersion = "8.4.0";
-        private static readonly string[] PusherClusters =
-        {
-            "us2", "us3", "mt1", "eu", "ap1", "ap2", "ap3", "ap4", "sa1"
-        };
-
-        private static Uri BuildPusherUri(string cluster)
-        {
-            return new Uri(
-                $"wss://ws-{cluster}.pusher.com/app/{PusherAppKey}?protocol=7&client=js&version={PusherClientVersion}&flash=false");
-        }
-
-        private sealed class PusherClusterMismatchException : Exception
-        {
-            public PusherClusterMismatchException(string message) : base(message) { }
-        }
-
+        // Read Kick's rendered chat through the browser session instead of opening
+        // a separate raw Pusher connection. This uses the same page the user sees.
         private readonly string channelSlug;
-        private int chatroomId;
         private volatile bool isConnected;
-        private ClientWebSocket currentSocket;
-        private CancellationTokenSource connectionCancellation;
-        private Task receiveTask;
         private TaskCompletionSource<bool> subscriptionReady;
+        private KickChatBrowserForm browserForm;
+        private bool suppressBrowserClose;
 
-        /// <summary>Diagnostic for the most recent failed connection attempt.</summary>
+        /// <summary>Diagnostic for the most recent browser/chat connection attempt.</summary>
         public string LastError { get; private set; } = string.Empty;
-        private readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
+
         private readonly object seenLock = new object();
         private readonly HashSet<string> seenMessageIds = new HashSet<string>();
         private readonly Queue<string> seenMessageOrder = new Queue<string>();
@@ -78,31 +57,40 @@ namespace GTAChaos.Utils
                 return false;
             }
 
+            this.subscriptionReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
             try
             {
-                this.chatroomId = await this.ResolveChatroomIdAsync();
+                this.browserForm = new KickChatBrowserForm(this.channelSlug);
+                this.browserForm.MessageReceived += this.HandleBrowserMessage;
+                this.browserForm.BrowserFailed += this.HandleBrowserFailure;
+                this.browserForm.FormClosed += this.HandleBrowserClosed;
+
+                Form owner = Form.ActiveForm;
+                if (owner != null && owner != this.browserForm)
+                    this.browserForm.Show(owner);
+                else
+                    this.browserForm.Show();
             }
             catch (Exception ex)
             {
-                this.LastError = "Could not retrieve the public Kick chatroom ID. " +
-                    ex.GetBaseException().Message;
-                Debug.WriteLine("Kick: could not resolve chatroom: " + ex);
+                this.LastError = "Could not open the embedded Kick browser. " + ex.GetBaseException().Message;
+                this.Kill();
                 OnLoginError?.Invoke(this, EventArgs.Empty);
                 return false;
             }
 
-            var cancellation = new CancellationTokenSource();
-            this.connectionCancellation = cancellation;
-            this.subscriptionReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            this.receiveTask = Task.Run(() => this.RunConnectionLoopAsync(cancellation.Token));
+            Task completed = await Task.WhenAny(
+                this.subscriptionReady.Task,
+                Task.Delay(TimeSpan.FromSeconds(60)));
 
-            Task completed = await Task.WhenAny(this.subscriptionReady.Task, Task.Delay(TimeSpan.FromSeconds(15)));
             if (completed != this.subscriptionReady.Task || !this.subscriptionReady.Task.Result)
             {
                 if (string.IsNullOrWhiteSpace(this.LastError))
                 {
-                    this.LastError = "Timed out waiting for Kick/Pusher to confirm the chatroom subscription. " +
-                        "The public WebSocket endpoint may be blocked or may have changed.";
+                    this.LastError =
+                        "The embedded Kick page did not expose a readable chat panel within 60 seconds. " +
+                        "Check that the channel page loaded and that the channel is live.";
                 }
 
                 this.Kill();
@@ -116,173 +104,11 @@ namespace GTAChaos.Utils
 
         public bool IsConnected() => this.isConnected;
 
-        private async Task<int> ResolveChatroomIdAsync()
+        private void HandleBrowserMessage(JObject message)
         {
-            string escapedSlug = Uri.EscapeDataString(this.channelSlug);
-            // Kick's public web endpoints have varied over time. Try the
-            // chatroom endpoint and both channel-info routes, which may contain
-            // chatroom.id. The v1 fallback must include "/channels/{slug}".
-            string[] urls =
-            {
-                $"https://kick.com/api/v2/channels/{escapedSlug}/chatroom",
-                $"https://kick.com/api/v1/channels/{escapedSlug}",
-                $"https://kick.com/api/v2/channels/{escapedSlug}"
-            };
+            string type = message?["type"]?.ToString() ?? string.Empty;
 
-            Exception lastError = null;
-            foreach (string url in urls)
-            {
-                try
-                {
-                    string json = await url
-                        .WithHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36")
-                        .WithHeader("Accept", "application/json, text/plain, */*")
-                        .WithHeader("Referer", $"https://kick.com/{escapedSlug}")
-                        .GetStringAsync();
-
-                    JObject root = JObject.Parse(json);
-                    JToken idToken =
-                        root["chatroom"]?["id"] ??
-                        root["data"]?["chatroom"]?["id"] ??
-                        root["data"]?["id"] ??
-                        root["chatroom_id"] ??
-                        root["id"];
-
-                    if (idToken != null && int.TryParse(idToken.ToString(), out int id) && id > 0)
-                        return id;
-
-                    lastError = new InvalidOperationException("Kick returned JSON without a chatroom ID.");
-                }
-                catch (Exception ex)
-                {
-                    lastError = ex;
-                    Debug.WriteLine("Kick chatroom resolver failed for " + url + ": " + ex.Message);
-                }
-            }
-
-            throw new InvalidOperationException(
-                "Could not resolve the public Kick chatroom. Kick may have changed or blocked its web endpoint.",
-                lastError);
-        }
-
-        private async Task RunConnectionLoopAsync(CancellationToken token)
-        {
-            int clusterIndex = 0;
-            var rejectedClusters = new List<string>();
-
-            while (!token.IsCancellationRequested)
-            {
-                string cluster = PusherClusters[clusterIndex];
-                ClientWebSocket socket = new ClientWebSocket();
-                this.currentSocket = socket;
-                try
-                {
-                    socket.Options.SetRequestHeader("Origin", "https://kick.com");
-                    await socket.ConnectAsync(BuildPusherUri(cluster), token);
-
-                    while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
-                    {
-                        string raw = await ReceiveTextAsync(socket, token);
-                        if (raw == null)
-                            break;
-
-                        await HandlePusherEnvelopeAsync(socket, raw, token);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (PusherClusterMismatchException ex)
-                {
-                    rejectedClusters.Add(cluster);
-                    this.LastError = $"Pusher rejected app key in cluster '{cluster}': {ex.Message} " +
-                        $"Tried clusters: {string.Join(", ", rejectedClusters)}.";
-                    Debug.WriteLine("Kick Pusher cluster mismatch: " + this.LastError);
-
-                    if (rejectedClusters.Count >= PusherClusters.Length)
-                    {
-                        this.LastError += " None of the known clusters accepted Kick's public key.";
-                        this.subscriptionReady?.TrySetResult(false);
-                    }
-                    else
-                    {
-                        clusterIndex = (clusterIndex + 1) % PusherClusters.Length;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    this.LastError = "Kick WebSocket error: " + ex.GetBaseException().Message;
-                    Debug.WriteLine("Kick websocket disconnected: " + ex);
-                    this.subscriptionReady?.TrySetResult(false);
-                }
-                finally
-                {
-                    // Drop the transport state quietly. The GUI must not treat
-                    // a transient socket failure as a user-requested disconnect.
-                    this.isConnected = false;
-                    try { socket.Dispose(); } catch { }
-                    if (ReferenceEquals(this.currentSocket, socket))
-                        this.currentSocket = null;
-                }
-
-                if (!token.IsCancellationRequested)
-                {
-                    TimeSpan retryDelay = rejectedClusters.Count > 0
-                        ? TimeSpan.FromMilliseconds(250)
-                        : TimeSpan.FromSeconds(3);
-                    try { await Task.Delay(retryDelay, token); }
-                    catch (OperationCanceledException) { break; }
-                }
-            }
-        }
-
-        private async Task HandlePusherEnvelopeAsync(ClientWebSocket socket, string raw, CancellationToken token)
-        {
-            JObject envelope;
-            try { envelope = JObject.Parse(raw); }
-            catch { return; }
-
-            string eventName = envelope["event"]?.ToString() ?? string.Empty;
-
-            if (eventName == "pusher:connection_established")
-            {
-                await SendPusherJsonAsync(socket, new
-                {
-                    @event = "pusher:subscribe",
-                    data = new { channel = $"chatrooms.{this.chatroomId}.v2", auth = string.Empty }
-                }, token);
-                return;
-            }
-
-            if (eventName == "pusher:error" ||
-                eventName == "pusher:subscription_error" ||
-                eventName == "pusher_internal:subscription_error")
-            {
-                JToken errorData = envelope["data"];
-                string detail = errorData?.ToString() ?? string.Empty;
-                JObject errorObject = errorData as JObject;
-                if (errorObject == null && errorData != null)
-                {
-                    try { errorObject = JObject.Parse(errorData.ToString()); }
-                    catch { }
-                }
-
-                int errorCode;
-                bool isClusterMismatch = eventName == "pusher:error" &&
-                    int.TryParse(errorObject?["code"]?.ToString(), out errorCode) &&
-                    errorCode == 4001;
-
-                if (isClusterMismatch)
-                    throw new PusherClusterMismatchException(detail);
-
-                this.LastError = $"Kick/Pusher rejected the chat subscription ({eventName}). {detail}";
-                Debug.WriteLine(this.LastError);
-                this.subscriptionReady?.TrySetResult(false);
-                return;
-            }
-
-            if (eventName == "pusher_internal:subscription_succeeded")
+            if (type == "chat-ready")
             {
                 bool wasConnected = this.isConnected;
                 this.isConnected = true;
@@ -293,50 +119,284 @@ namespace GTAChaos.Utils
                 return;
             }
 
-            if (eventName == "pusher:ping")
+            if (type == "chat-error")
             {
-                await SendPusherJsonAsync(socket, new { @event = "pusher:pong", data = new { } }, token);
+                string detail = message["message"]?.ToString();
+                this.HandleBrowserFailure(string.IsNullOrWhiteSpace(detail)
+                    ? "Kick's rendered chat container could not be found."
+                    : detail);
                 return;
             }
 
-            if (eventName.IndexOf("ChatMessage", StringComparison.OrdinalIgnoreCase) >= 0)
-                this.ProcessChatEvent(envelope);
+            if (type != "chat-message")
+                return;
+
+            string username = message["username"]?.ToString();
+            string content = message["content"]?.ToString();
+            string id = message["id"]?.ToString();
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(content))
+                return;
+
+            JObject payload = new JObject();
+            payload["id"] = string.IsNullOrWhiteSpace(id)
+                ? Guid.NewGuid().ToString("N")
+                : id;
+            payload["sender"] = new JObject(new JProperty("username", username));
+            payload["content"] = content;
+
+            JObject envelope = new JObject(new JProperty("data", payload));
+            this.ProcessChatEvent(envelope);
         }
 
-        private async Task SendPusherJsonAsync(ClientWebSocket socket, object value, CancellationToken token)
+        private void HandleBrowserFailure(string detail)
         {
-            string json = Newtonsoft.Json.JsonConvert.SerializeObject(value);
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
+            this.LastError = "Embedded Kick browser: " + detail;
+            Debug.WriteLine(this.LastError);
 
-            await this.sendLock.WaitAsync(token);
-            try
-            {
-                if (socket.State == WebSocketState.Open)
-                    await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, token);
-            }
-            finally
-            {
-                this.sendLock.Release();
-            }
+            if (!this.isConnected)
+                this.subscriptionReady?.TrySetResult(false);
         }
 
-        private static async Task<string> ReceiveTextAsync(ClientWebSocket socket, CancellationToken token)
+        private void HandleBrowserClosed(object sender, FormClosedEventArgs e)
         {
-            byte[] buffer = new byte[8192];
-            using (var stream = new System.IO.MemoryStream())
+            if (ReferenceEquals(sender, this.browserForm))
+                this.browserForm = null;
+
+            if (this.suppressBrowserClose)
+                return;
+
+            bool wasConnected = this.isConnected;
+            this.isConnected = false;
+            this.LastError = "The embedded Kick chat window was closed.";
+            this.subscriptionReady?.TrySetResult(false);
+
+            if (wasConnected)
+                OnDisconnected?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Visible browser window for Kick. New message DOM nodes are normalized into
+        /// the same chat event shape consumed by the existing voting code.
+        /// </summary>
+        private sealed class KickChatBrowserForm : Form
+        {
+            private readonly string channelSlug;
+            private readonly WebView2 webView;
+            private bool reportedNavigationFailure;
+
+            public event Action<JObject> MessageReceived;
+            public event Action<string> BrowserFailed;
+
+            public KickChatBrowserForm(string channelSlug)
             {
-                WebSocketReceiveResult result;
-                do
+                this.channelSlug = channelSlug;
+                this.Text = "Kick Chat Reader — " + channelSlug;
+                this.StartPosition = FormStartPosition.CenterScreen;
+                this.Size = new System.Drawing.Size(1100, 820);
+                this.MinimumSize = new System.Drawing.Size(760, 520);
+                this.ShowInTaskbar = true;
+
+                this.webView = new WebView2
                 {
-                    result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
-                    if (result.MessageType == WebSocketMessageType.Close)
-                        return null;
-                    stream.Write(buffer, 0, result.Count);
-                }
-                while (!result.EndOfMessage);
-
-                return Encoding.UTF8.GetString(stream.ToArray());
+                    Dock = DockStyle.Fill
+                };
+                this.Controls.Add(this.webView);
+                this.Shown += this.KickChatBrowserForm_Shown;
             }
+
+            private async void KickChatBrowserForm_Shown(object sender, EventArgs e)
+            {
+                try
+                {
+                    await this.webView.EnsureCoreWebView2Async();
+
+                    this.webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                    this.webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                    this.webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                    this.webView.CoreWebView2.IsMuted = true;
+                    this.webView.CoreWebView2.WebMessageReceived += this.CoreWebView2_WebMessageReceived;
+                    this.webView.CoreWebView2.NavigationCompleted += this.CoreWebView2_NavigationCompleted;
+
+                    await this.webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(ChatObserverScript);
+                    this.webView.CoreWebView2.Navigate("https://kick.com/" + Uri.EscapeDataString(this.channelSlug));
+                }
+                catch (Exception ex)
+                {
+                    this.ShowBrowserError(
+                        "No se pudo iniciar el navegador integrado. " +
+                        "Verificá que Microsoft Edge WebView2 Runtime esté instalado. " +
+                        ex.GetBaseException().Message);
+                }
+            }
+
+            private void CoreWebView2_NavigationCompleted(
+                object sender,
+                CoreWebView2NavigationCompletedEventArgs e)
+            {
+                if (!e.IsSuccess && !this.reportedNavigationFailure)
+                {
+                    this.reportedNavigationFailure = true;
+                    this.BrowserFailed?.Invoke("Kick page navigation failed: " + e.WebErrorStatus + ".");
+                }
+            }
+
+            private void CoreWebView2_WebMessageReceived(
+                object sender,
+                CoreWebView2WebMessageReceivedEventArgs e)
+            {
+                try
+                {
+                    JObject message = JObject.Parse(e.WebMessageAsJson);
+                    this.MessageReceived?.Invoke(message);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Could not parse message from Kick browser: " + ex.Message);
+                }
+            }
+
+            private void ShowBrowserError(string message)
+            {
+                this.webView.Visible = false;
+                var errorLabel = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Padding = new Padding(24),
+                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                    AutoSize = false,
+                    Text = message
+                };
+                this.Controls.Add(errorLabel);
+                errorLabel.BringToFront();
+                this.BrowserFailed?.Invoke(message);
+            }
+
+            // Kick changes its React markup occasionally. The first selector is used
+            // by an existing open-source chat reader; the others are fallbacks.
+            // We observe only newly added message nodes, so old chat history is not
+            // replayed as votes when the connection starts.
+            private const string ChatObserverScript = @"
+(() => {
+    if (window.__gtaChaosKickDomReaderInstalled) return;
+    window.__gtaChaosKickDomReaderInstalled = true;
+
+    const send = (payload) => {
+        try { window.chrome.webview.postMessage(payload); } catch (_) {}
+    };
+    const containerSelectors = [
+        '#chatroom > div:nth-child(2) > div:first-child',
+        '#chatroom [data-testid=""chatroom""]',
+        '#channel-chatroom',
+        '[data-testid=""chatroom""]',
+        '#chatroom'
+    ];
+    const seenContent = new WeakSet();
+    let messageSequence = 0;
+    let attempts = 0;
+
+    const findContainer = () => {
+        for (const selector of containerSelectors) {
+            try {
+                const element = document.querySelector(selector);
+                if (element) return element;
+            } catch (_) {}
+        }
+        return null;
+    };
+
+    const processTree = (root, container) => {
+        if (!root || root.nodeType !== 1) return;
+        const contents = [];
+        if (root.matches && root.matches('.chat-entry-content')) contents.push(root);
+        if (root.querySelectorAll) {
+            root.querySelectorAll('.chat-entry-content').forEach(element => contents.push(element));
+        }
+
+        for (const contentElement of contents) {
+            if (seenContent.has(contentElement)) continue;
+
+            let authorElement = null;
+            let messageRoot = null;
+            let parent = contentElement.parentElement;
+            let depth = 0;
+
+            while (parent && parent !== container && depth < 10) {
+                const candidate =
+                    parent.querySelector('.chat-message-identity .chat-entry-username') ||
+                    parent.querySelector('.chat-entry-username');
+                if (candidate && (candidate.innerText || candidate.textContent || '').trim()) {
+                    authorElement = candidate;
+                    messageRoot = parent;
+                    break;
+                }
+                parent = parent.parentElement;
+                depth++;
+            }
+
+            if (!authorElement || !messageRoot) continue;
+
+            const username = (authorElement.innerText || authorElement.textContent || '').trim();
+            const content = (contentElement.innerText || contentElement.textContent || '').trim();
+            if (!username || !content) continue;
+
+            seenContent.add(contentElement);
+            const idRoot = messageRoot.closest('[data-message-id], [data-id]') || messageRoot;
+            const id = idRoot.getAttribute('data-message-id') ||
+                       idRoot.getAttribute('data-id') ||
+                       ('kick-dom-' + Date.now() + '-' + (++messageSequence));
+
+            send({ type: 'chat-message', id, username, content });
+        }
+    };
+
+    const scanAddedNode = (node, container) => {
+        if (!node || node.nodeType !== 1) return;
+        processTree(node, container);
+
+        // Some React updates insert the username and text in separate steps.
+        // Scan their small common ancestors, but never the whole chat container,
+        // otherwise old messages could be re-counted as new votes.
+        let parent = node.parentElement;
+        let depth = 0;
+        while (parent && parent !== container && depth < 6) {
+            processTree(parent, container);
+            parent = parent.parentElement;
+            depth++;
+        }
+    };
+
+    const attachObserver = () => {
+        const container = findContainer();
+        if (!container) {
+            attempts++;
+            if (attempts < 90) {
+                window.setTimeout(attachObserver, 1000);
+            } else {
+                send({
+                    type: 'chat-error',
+                    message: 'Kick loaded, but its chat panel was not found. The page layout may have changed or the channel chat is unavailable.'
+                });
+            }
+            return;
+        }
+
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) scanAddedNode(node, container);
+            }
+        });
+        observer.observe(container, { childList: true, subtree: true });
+        send({ type: 'chat-ready' });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachObserver, { once: true });
+    } else {
+        attachObserver();
+    }
+})();
+";
         }
 
         private void ProcessChatEvent(JObject envelope)
@@ -472,16 +532,20 @@ namespace GTAChaos.Utils
 
         public void Kill()
         {
-            CancellationTokenSource cancellation = this.connectionCancellation;
-            ClientWebSocket socket = this.currentSocket;
-            bool hadSession = cancellation != null || socket != null || this.receiveTask != null;
+            KickChatBrowserForm form = this.browserForm;
+            bool hadSession = form != null || this.isConnected;
 
-            try { cancellation?.Cancel(); } catch { }
-            try { socket?.Abort(); } catch { }
-
-            this.connectionCancellation = null;
-            this.currentSocket = null;
+            this.browserForm = null;
             this.isConnected = false;
+            this.subscriptionReady?.TrySetResult(false);
+
+            if (form != null && !form.IsDisposed)
+            {
+                this.suppressBrowserClose = true;
+                try { form.Close(); }
+                catch (Exception ex) { Debug.WriteLine("Could not close Kick browser window: " + ex.Message); }
+                finally { this.suppressBrowserClose = false; }
+            }
 
             if (hadSession)
                 OnDisconnected?.Invoke(this, EventArgs.Empty);
