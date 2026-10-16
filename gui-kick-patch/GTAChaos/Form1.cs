@@ -2090,7 +2090,7 @@ namespace GTAChaos.Forms
             {
                 AutoSize = true,
                 MaximumSize = new System.Drawing.Size(650, 0),
-                Text = "Con esta opción activa, el contador automático se congela. En el chat conectado escribí !chaos seguido del ID exacto del efecto, por ejemplo: !chaos effect_blackout. Los comandos no se cuentan como votos. Desactivá la opción para reanudar el temporizador.",
+                Text = "Con esta opción activa, el contador automático se congela. Usá !chaos <id_del_efecto> para probar un efecto con su duración normal, o !chaos clear para limpiar los efectos activos a la fuerza. Los comandos no se cuentan como votos. Desactivá la opción para reanudar el temporizador.",
                 Margin = new Padding(3, 3, 3, 12)
             });
             this.labelDebugChatStatus = new Label
@@ -2147,17 +2147,25 @@ namespace GTAChaos.Forms
 
             if (!args.HasEffectId)
             {
-                this.labelDebugChatStatus.Text = "Formato incorrecto. Usá !chaos <id_del_efecto>.";
+                this.labelDebugChatStatus.Text = "Formato: !chaos <id_del_efecto> o !chaos clear.";
                 return;
             }
 
-            AbstractEffect effect = EffectDatabase.GetByID(args.EffectId);
-            if (effect == null && !args.EffectId.StartsWith("effect_", StringComparison.OrdinalIgnoreCase))
+            // Shortcut for the existing in-game Clear Active Effects command.
+            bool clearRequested = string.Equals(args.EffectId, "clear", StringComparison.OrdinalIgnoreCase);
+            AbstractEffect effect = clearRequested
+                ? EffectDatabase.GetByID("clear_active_effects")
+                : EffectDatabase.GetByID(args.EffectId);
+
+            if (effect == null && !clearRequested &&
+                !args.EffectId.StartsWith("effect_", StringComparison.OrdinalIgnoreCase))
                 effect = EffectDatabase.GetByID("effect_" + args.EffectId);
 
             if (effect == null)
             {
-                this.labelDebugChatStatus.Text = "ID no encontrado: " + args.EffectId;
+                this.labelDebugChatStatus.Text = clearRequested
+                    ? "No se encontró el efecto clear_active_effects en esta versión."
+                    : "ID no encontrado: " + args.EffectId;
                 return;
             }
 
@@ -2166,14 +2174,21 @@ namespace GTAChaos.Forms
             {
                 EffectDatabase.ShouldCooldown = false;
                 effect.ResetSubtext();
-                effect = EffectDatabase.RunEffect(effect);
+
+                // Use the same effective duration that the normal effect runner would
+                // calculate (per-effect JSON override, multiplier and mode cap included).
+                int duration = effect.GetDuration();
+                effect = EffectDatabase.RunEffect(effect, -1, duration);
                 if (effect != null)
                     this.AddEffectToListBox(effect);
 
                 this.labelDebugChatStatus.Text = effect == null
                     ? "No se pudo ejecutar el efecto solicitado."
-                    : "Ejecutado: " + effect.GetDisplayName(DisplayNameType.UI) +
-                      " (comando de " + args.Username + " en " + args.Platform + ").";
+                    : clearRequested
+                        ? "Se solicitó limpiar los efectos activos."
+                        : "Ejecutado: " + effect.GetDisplayName(DisplayNameType.UI) +
+                          " durante " + Math.Ceiling(duration / 1000.0) + " s (comando de " +
+                          args.Username + " en " + args.Platform + ").";
             }
             catch (Exception ex)
             {
