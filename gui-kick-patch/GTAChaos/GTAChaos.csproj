@@ -383,6 +383,7 @@
     <Compile Include="src\utils\stream\IStreamConnection.cs" />
     <Compile Include="src\utils\Location.cs" />
     <Compile Include="src\utils\stream\StreamHandler.cs" />
+    <Compile Include="src\utils\DebugChatCommandHandler.cs" />
     <Compile Include="src\utils\Sync.cs" />
     <Compile Include="src\utils\RandomHandler.cs" />
     <Compile Include="src\utils\Shared.cs" />
