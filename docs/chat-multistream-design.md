@@ -56,7 +56,7 @@ The regular single-platform path should use the same coordinator with only one a
 
 Add a separate GUI tab with an opt-in setting for chat commands. When enabled, the automatic main/stream timer must stop advancing; it resumes when the setting is disabled and the timer was otherwise running.
 
-Accepted command: `!chaos <effect_id>`. Parse it before normal vote handling and consume it so it cannot count as a vote. Resolve exact effect IDs, execute only the requested effect, bypass normal effect cooldown for this manual test, and report malformed/unknown IDs in the GUI. The command handler is local/read-only: it does not send messages back to any platform. Keep the feature disabled by default.
+Accepted commands: `!chaos <effect_id>` and `!chaos clear`. Parse them before normal vote handling and consume them so they cannot count as votes. Resolve exact effect IDs, execute only the requested effect with its effective normal duration (including the per-effect JSON override, multiplier, and mode cap), bypass normal effect cooldown for this manual test, and report malformed/unknown IDs in the GUI. The `clear` alias invokes the existing `clear_active_effects` action. The command handler is local/read-only: it does not send messages back to any platform. Keep the feature disabled by default.
 
 ## Emote and empty-message policy
 
