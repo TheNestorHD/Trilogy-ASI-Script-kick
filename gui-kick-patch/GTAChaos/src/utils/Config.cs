@@ -50,6 +50,10 @@ namespace GTAChaos.Utils
         public bool StreamMajorityVotes = true;
         public bool StreamHideVotingEffectsIngame = true;
 
+        // Opt-in developer command mode. When enabled, the automatic timer is frozen
+        // and selected platform chat adapters can accept !chaos <effect_id>.
+        public bool DebugChatCommandsEnabled;
+
         // MultiStream source profiles. The connection manager will consume these
         // profiles; keeping them in config now lets the GUI persist its setup.
         public bool MultiStreamEnabled;
