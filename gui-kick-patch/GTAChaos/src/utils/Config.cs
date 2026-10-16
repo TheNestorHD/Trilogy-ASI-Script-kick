@@ -50,6 +50,27 @@ namespace GTAChaos.Utils
         public bool StreamMajorityVotes = true;
         public bool StreamHideVotingEffectsIngame = true;
 
+        // MultiStream source profiles. The connection manager will consume these
+        // profiles; keeping them in config now lets the GUI persist its setup.
+        public bool MultiStreamEnabled;
+        public List<MultiStreamSourceConfig> MultiStreamSources = new List<MultiStreamSourceConfig>
+        {
+            new MultiStreamSourceConfig(),
+            new MultiStreamSourceConfig(),
+            new MultiStreamSourceConfig()
+        };
+
+        public class MultiStreamSourceConfig
+        {
+            public bool Enabled;
+            public string Platform = "Twitch";
+            public string Channel = "";
+            public string ClientID = "";
+            public string AccessToken = "";
+            public bool UseForChat = true;
+            public bool UseForVoting = true;
+        }
+
         // Sync
         public string SyncServer;
         public string SyncChannel;
