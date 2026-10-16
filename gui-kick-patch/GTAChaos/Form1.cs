@@ -23,6 +23,25 @@ namespace GTAChaos.Forms
         private readonly Dictionary<string, EffectTreeNode> idToEffectNodeMap = new();
         private IStreamConnection stream;
 
+        private TabPage tabMultiStreamSettings;
+        private TabPage tabDebugSettings;
+        private CheckBox checkBoxMultiStreamEnabled;
+        private CheckBox checkBoxDebugChatCommands;
+        private Label labelMultiStreamStatus;
+        private Label labelDebugChatStatus;
+        private readonly List<MultiStreamSourceControls> multiStreamSourceControls = new List<MultiStreamSourceControls>();
+
+        private sealed class MultiStreamSourceControls
+        {
+            public CheckBox Enabled;
+            public ComboBox Platform;
+            public TextBox Channel;
+            public TextBox ClientID;
+            public TextBox AccessToken;
+            public CheckBox UseForChat;
+            public CheckBox UseForVoting;
+        }
+
         private int elapsedCount;
         private int timesUntilRapidFire;
         private bool experimentalModeEnabled = true;
@@ -65,6 +84,8 @@ namespace GTAChaos.Forms
 
             this.TryLoadConfig();
 
+            this.InitializeMultiStreamAndDebugTabs();
+
             this.UpdateProgramText();
 
             this.timesUntilRapidFire = new Random().Next(10, 15);
@@ -105,7 +126,11 @@ namespace GTAChaos.Forms
             catch (Exception) { }
         }
 
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e) => this.SaveConfig();
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            this.SaveConfig();
+            DebugChatCommandHandler.CommandReceived -= this.OnDebugChatCommandReceived;
+        }
 
         private void TryLoadConfig()
         {
@@ -327,6 +352,14 @@ namespace GTAChaos.Forms
 
         private void OnTimerTick(object sender, EventArgs e)
         {
+            // Developer testing mode freezes the automatic counter in both normal
+            // and stream modes. Chat commands can still trigger individual effects.
+            if (Config.Instance().DebugChatCommandsEnabled)
+            {
+                this.stopwatch.Stop();
+                return;
+            }
+
             if (Shared.IsStreamMode)
             {
                 this.TickStream();
@@ -806,7 +839,7 @@ namespace GTAChaos.Forms
         private void SetEnabled(bool enabled)
         {
             Shared.TimerEnabled = enabled;
-            if (Shared.TimerEnabled)
+            if (Shared.TimerEnabled && !Config.Instance().DebugChatCommandsEnabled)
             {
                 this.stopwatch.Start();
             }
@@ -1769,6 +1802,339 @@ namespace GTAChaos.Forms
                         this.SetPollsTabVisible(false);
                         break;
                     }
+            }
+        }
+
+
+        // -------------------- MultiStream configuration UI --------------------
+
+        private void InitializeMultiStreamAndDebugTabs()
+        {
+            this.EnsureMultiStreamProfiles();
+            this.CreateMultiStreamSettingsTab();
+            this.CreateDebugSettingsTab();
+
+            DebugChatCommandHandler.CommandReceived += this.OnDebugChatCommandReceived;
+        }
+
+        private void EnsureMultiStreamProfiles()
+        {
+            if (Config.Instance().MultiStreamSources == null)
+                Config.Instance().MultiStreamSources = new List<Config.MultiStreamSourceConfig>();
+
+            while (Config.Instance().MultiStreamSources.Count < 3)
+                Config.Instance().MultiStreamSources.Add(new Config.MultiStreamSourceConfig());
+
+            if (Config.Instance().MultiStreamSources.Count > 3)
+                Config.Instance().MultiStreamSources = Config.Instance().MultiStreamSources.Take(3).ToList();
+        }
+
+        private void CreateMultiStreamSettingsTab()
+        {
+            this.tabMultiStreamSettings = new TabPage("MultiStream");
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(12)
+            };
+
+            this.checkBoxMultiStreamEnabled = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Activar configuración MultiStream (hasta 3 fuentes)",
+                Checked = Config.Instance().MultiStreamEnabled,
+                Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
+                Margin = new Padding(3, 3, 3, 10)
+            };
+            this.checkBoxMultiStreamEnabled.CheckedChanged += (s, e) =>
+            {
+                Config.Instance().MultiStreamEnabled = this.checkBoxMultiStreamEnabled.Checked;
+                this.UpdateMultiStreamStatus();
+            };
+            panel.Controls.Add(this.checkBoxMultiStreamEnabled);
+
+            var explanation = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new System.Drawing.Size(650, 0),
+                Text = "Configurá hasta tres fuentes. Cada una puede habilitarse para el chat y/o para las votaciones. Los cambios se guardan en config.cfg al cerrar la GUI.",
+                Margin = new Padding(3, 0, 3, 10)
+            };
+            panel.Controls.Add(explanation);
+
+            for (int i = 0; i < 3; i++)
+            {
+                Config.MultiStreamSourceConfig config = Config.Instance().MultiStreamSources[i];
+                var controls = new MultiStreamSourceControls();
+                var group = new GroupBox
+                {
+                    Text = "Fuente " + (i + 1),
+                    Width = 650,
+                    Height = 190,
+                    Padding = new Padding(8),
+                    Margin = new Padding(3, 3, 3, 8)
+                };
+                var contents = new FlowLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    FlowDirection = FlowDirection.TopDown,
+                    WrapContents = false,
+                    AutoScroll = true,
+                    Padding = new Padding(4)
+                };
+
+                var topRow = new FlowLayoutPanel
+                {
+                    Width = 615,
+                    Height = 30,
+                    FlowDirection = FlowDirection.LeftToRight,
+                    WrapContents = false
+                };
+                controls.Enabled = new CheckBox { Text = "Usar", AutoSize = true, Checked = config.Enabled, Margin = new Padding(3, 5, 12, 3) };
+                controls.Platform = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 115, Margin = new Padding(3) };
+                controls.Platform.Items.AddRange(new object[] { "Twitch", "YouTube", "Kick" });
+                string platform = string.IsNullOrWhiteSpace(config.Platform) ? "Twitch" : config.Platform;
+                controls.Platform.SelectedItem = controls.Platform.Items.Contains(platform) ? platform : "Twitch";
+                controls.UseForChat = new CheckBox { Text = "Chat", AutoSize = true, Checked = config.UseForChat, Margin = new Padding(12, 5, 6, 3) };
+                controls.UseForVoting = new CheckBox { Text = "Votaciones", AutoSize = true, Checked = config.UseForVoting, Margin = new Padding(6, 5, 3, 3) };
+                topRow.Controls.Add(controls.Enabled);
+                topRow.Controls.Add(controls.Platform);
+                topRow.Controls.Add(controls.UseForChat);
+                topRow.Controls.Add(controls.UseForVoting);
+                contents.Controls.Add(topRow);
+
+                controls.Channel = new TextBox { Width = 490, Text = config.Channel ?? "", Margin = new Padding(3) };
+                controls.ClientID = new TextBox { Width = 490, Text = config.ClientID ?? "", Margin = new Padding(3) };
+                controls.AccessToken = new TextBox { Width = 490, Text = config.AccessToken ?? "", PasswordChar = '*', Margin = new Padding(3) };
+
+                contents.Controls.Add(this.CreateMultiStreamTextRow("Canal / ID:", controls.Channel));
+                contents.Controls.Add(this.CreateMultiStreamTextRow("Client ID:", controls.ClientID));
+                contents.Controls.Add(this.CreateMultiStreamTextRow("Token:", controls.AccessToken));
+
+                group.Controls.Add(contents);
+                panel.Controls.Add(group);
+                this.multiStreamSourceControls.Add(controls);
+
+                int sourceIndex = i;
+                controls.Enabled.CheckedChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+                controls.Platform.SelectedIndexChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+                controls.UseForChat.CheckedChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+                controls.UseForVoting.CheckedChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+                controls.Channel.TextChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+                controls.ClientID.TextChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+                controls.AccessToken.TextChanged += (s, e) => this.UpdateMultiStreamSourceConfig(sourceIndex);
+            }
+
+            this.labelMultiStreamStatus = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new System.Drawing.Size(650, 0),
+                Text = "MultiStream guarda aquí la configuración de las fuentes.",
+                Margin = new Padding(3, 4, 3, 12)
+            };
+            panel.Controls.Add(this.labelMultiStreamStatus);
+
+            var saveButton = new Button
+            {
+                Text = "Guardar configuración ahora",
+                AutoSize = true,
+                Margin = new Padding(3, 3, 3, 12)
+            };
+            saveButton.Click += (s, e) =>
+            {
+                this.SaveConfig();
+                this.labelMultiStreamStatus.Text = "Configuración guardada en config.cfg.";
+            };
+            panel.Controls.Add(saveButton);
+
+            this.tabMultiStreamSettings.Controls.Add(panel);
+            this.tabs.TabPages.Add(this.tabMultiStreamSettings);
+            this.UpdateMultiStreamStatus();
+        }
+
+        private Control CreateMultiStreamTextRow(string label, TextBox textBox)
+        {
+            var row = new FlowLayoutPanel
+            {
+                Width = 615,
+                Height = 31,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            row.Controls.Add(new Label
+            {
+                Text = label,
+                Width = 105,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+                Margin = new Padding(3, 5, 3, 3)
+            });
+            row.Controls.Add(textBox);
+            return row;
+        }
+
+        private void UpdateMultiStreamSourceConfig(int index)
+        {
+            if (index < 0 || index >= this.multiStreamSourceControls.Count ||
+                index >= Config.Instance().MultiStreamSources.Count)
+                return;
+
+            MultiStreamSourceControls controls = this.multiStreamSourceControls[index];
+            Config.MultiStreamSourceConfig config = Config.Instance().MultiStreamSources[index];
+            config.Enabled = controls.Enabled.Checked;
+            config.Platform = Convert.ToString(controls.Platform.SelectedItem) ?? "Twitch";
+            config.Channel = controls.Channel.Text.Trim();
+            config.ClientID = controls.ClientID.Text.Trim();
+            config.AccessToken = controls.AccessToken.Text;
+            config.UseForChat = controls.UseForChat.Checked;
+            config.UseForVoting = controls.UseForVoting.Checked;
+            this.UpdateMultiStreamStatus();
+        }
+
+        private void UpdateMultiStreamStatus()
+        {
+            if (this.labelMultiStreamStatus == null)
+                return;
+
+            int enabled = Config.Instance().MultiStreamSources == null
+                ? 0
+                : Config.Instance().MultiStreamSources.Count(source => source != null && source.Enabled);
+            this.labelMultiStreamStatus.Text = !Config.Instance().MultiStreamEnabled
+                ? "MultiStream está desactivado. Los perfiles quedan guardados, pero no se conectan."
+                : enabled == 0
+                    ? "Activaste MultiStream, pero todavía no hay fuentes habilitadas."
+                    : enabled + " fuente(s) configurada(s). La conexión simultánea se integrará en la siguiente etapa; por ahora sigue disponible el conector individual actual.";
+        }
+
+        // -------------------- Debug chat commands --------------------
+
+        private void CreateDebugSettingsTab()
+        {
+            this.tabDebugSettings = new TabPage("Debug");
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(16)
+            };
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true,
+                Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold),
+                Text = "Comandos de depuración por chat",
+                Margin = new Padding(3, 3, 3, 12)
+            });
+            this.checkBoxDebugChatCommands = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Activar !chaos <id_del_efecto>",
+                Checked = Config.Instance().DebugChatCommandsEnabled,
+                Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
+                Margin = new Padding(3, 3, 3, 10)
+            };
+            this.checkBoxDebugChatCommands.CheckedChanged += this.CheckBoxDebugChatCommands_CheckedChanged;
+            panel.Controls.Add(this.checkBoxDebugChatCommands);
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true,
+                MaximumSize = new System.Drawing.Size(650, 0),
+                Text = "Con esta opción activa, el contador automático se congela. En el chat conectado escribí !chaos seguido del ID exacto del efecto, por ejemplo: !chaos effect_blackout. Los comandos no se cuentan como votos. Desactivá la opción para reanudar el temporizador.",
+                Margin = new Padding(3, 3, 3, 12)
+            });
+            this.labelDebugChatStatus = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new System.Drawing.Size(650, 0),
+                Text = Config.Instance().DebugChatCommandsEnabled
+                    ? "Modo de depuración activo: el temporizador está pausado."
+                    : "Modo de depuración desactivado.",
+                Margin = new Padding(3, 3, 3, 12)
+            };
+            panel.Controls.Add(this.labelDebugChatStatus);
+            this.tabDebugSettings.Controls.Add(panel);
+            this.tabs.TabPages.Add(this.tabDebugSettings);
+        }
+
+        private void CheckBoxDebugChatCommands_CheckedChanged(object sender, EventArgs e)
+        {
+            bool enabled = this.checkBoxDebugChatCommands.Checked;
+            Config.Instance().DebugChatCommandsEnabled = enabled;
+
+            if (enabled)
+            {
+                this.stopwatch.Stop();
+                this.labelDebugChatStatus.Text = "Modo de depuración activo: el temporizador está pausado.";
+            }
+            else
+            {
+                if (Shared.TimerEnabled)
+                    this.stopwatch.Start();
+                this.labelDebugChatStatus.Text = "Modo de depuración desactivado.";
+            }
+        }
+
+        private void OnDebugChatCommandReceived(object sender, DebugChatCommandEventArgs e)
+        {
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return;
+
+            try
+            {
+                this.BeginInvoke(new Action(() => this.RunDebugChatCommand(e)));
+            }
+            catch (InvalidOperationException)
+            {
+                // The window may close while a platform callback is arriving.
+            }
+        }
+
+        private void RunDebugChatCommand(DebugChatCommandEventArgs args)
+        {
+            if (this.IsDisposed || !Config.Instance().DebugChatCommandsEnabled)
+                return;
+
+            if (!args.HasEffectId)
+            {
+                this.labelDebugChatStatus.Text = "Formato incorrecto. Usá !chaos <id_del_efecto>.";
+                return;
+            }
+
+            AbstractEffect effect = EffectDatabase.GetByID(args.EffectId);
+            if (effect == null && !args.EffectId.StartsWith("effect_", StringComparison.OrdinalIgnoreCase))
+                effect = EffectDatabase.GetByID("effect_" + args.EffectId);
+
+            if (effect == null)
+            {
+                this.labelDebugChatStatus.Text = "ID no encontrado: " + args.EffectId;
+                return;
+            }
+
+            bool previousCooldownState = EffectDatabase.ShouldCooldown;
+            try
+            {
+                EffectDatabase.ShouldCooldown = false;
+                effect.ResetSubtext();
+                effect = EffectDatabase.RunEffect(effect);
+                if (effect != null)
+                    this.AddEffectToListBox(effect);
+
+                this.labelDebugChatStatus.Text = effect == null
+                    ? "No se pudo ejecutar el efecto solicitado."
+                    : "Ejecutado: " + effect.GetDisplayName(DisplayNameType.UI) +
+                      " (comando de " + args.Username + " en " + args.Platform + ").";
+            }
+            catch (Exception ex)
+            {
+                this.labelDebugChatStatus.Text = "Error al ejecutar " + args.EffectId + ": " + ex.GetBaseException().Message;
+            }
+            finally
+            {
+                EffectDatabase.ShouldCooldown = previousCooldownState;
             }
         }
 
