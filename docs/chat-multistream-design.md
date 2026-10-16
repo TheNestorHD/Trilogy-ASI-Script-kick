@@ -52,6 +52,16 @@ There is no reliable way to determine that accounts on two unrelated platforms b
 
 The regular single-platform path should use the same coordinator with only one adapter enabled. This prevents single-platform and MultiStream voting behavior from drifting apart.
 
+## Debug commands
+
+Add a separate GUI tab with an opt-in setting for chat commands. When enabled, the automatic main/stream timer must stop advancing; it resumes when the setting is disabled and the timer was otherwise running.
+
+Accepted command: `!chaos <effect_id>`. Parse it before normal vote handling and consume it so it cannot count as a vote. Resolve exact effect IDs, execute only the requested effect, bypass normal effect cooldown for this manual test, and report malformed/unknown IDs in the GUI. The command handler is local/read-only: it does not send messages back to any platform. Keep the feature disabled by default.
+
+## Emote and empty-message policy
+
+All game/chat overlay text must be plain text. Strip message spans that the adapter identifies as emotes, and never load emote images, GIFs, stickers or avatar assets. Kick DOM parsing removes rich-media nodes before reading text; YouTube only uses ordinary text runs; Twitch can use TwitchLib's emote start/end metadata. If cleanup leaves a blank or whitespace-only message, discard it before adding anything to overlay history.
+
 ## OBS voting overlay
 
 - The instruction should be platform-neutral by default (not hard-coded to Kick).
