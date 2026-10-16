@@ -207,7 +207,8 @@ namespace GTAChaos.Utils
             if (source == null)
                 return;
 
-            this.ChatMessageReceived?.Invoke(this, args);
+            if (source.Config.UseForChat)
+                this.ChatMessageReceived?.Invoke(this, args);
 
             if (!source.Config.UseForVoting)
                 return;
