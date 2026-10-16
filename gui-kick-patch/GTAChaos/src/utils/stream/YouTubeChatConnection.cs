@@ -203,35 +203,17 @@ namespace GTAChaos.Utils
                     continue;
                 }
 
-                JToken renderer = null;
-                if (item["liveChatTextMessageRenderer"] != null)
-                {
-                    renderer = item["liveChatTextMessageRenderer"];
-                }
-                else if (item["liveChatPaidMessageRenderer"] != null)
-                {
-                    renderer = item["liveChatPaidMessageRenderer"];
-                }
-                else if (item["liveChatMembershipItemRenderer"] != null)
-                {
-                    renderer = item["liveChatMembershipItemRenderer"];
-                }
-
+                // Only ordinary user chat messages belong in the shared chat/voting
+                // stream. Paid messages and membership events are intentionally ignored.
+                JToken renderer = item["liveChatTextMessageRenderer"];
                 if (renderer == null)
                 {
                     continue;
                 }
 
-                // Message Runs
-                JToken messageItem = null;
-                if (renderer["message"] != null)
-                {
-                    messageItem = renderer["message"]?["runs"];
-                }
-                else if (item["headerSubtext"] != null)
-                {
-                    messageItem = renderer["headerSubtext"]?["runs"];
-                }
+                // Extract actual text runs only; custom emoji-only runs have no "text"
+                // field and are omitted rather than becoming media or vote input.
+                JToken messageItem = renderer["message"]?["runs"];
 
                 if (messageItem == null || messageItem[0] == null)
                 {
