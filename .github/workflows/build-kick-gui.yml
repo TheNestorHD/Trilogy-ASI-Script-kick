@@ -5,6 +5,7 @@ on:
     branches:
       - feature/kick-chat-gui-recovery
       - feature/obs-voting-overlay
+      - feature/in-game-chat-multistream
     paths:
       - "gui-kick-patch/**"
       - ".github/workflows/build-kick-gui.yml"
