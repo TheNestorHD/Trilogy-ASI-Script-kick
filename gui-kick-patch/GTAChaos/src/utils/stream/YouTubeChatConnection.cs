@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GTAChaos.Utils
@@ -41,6 +42,7 @@ namespace GTAChaos.Utils
         private readonly HashSet<string> rapidFireVoters = new();
 
         private readonly System.Timers.Timer fetchMessagesTimer;
+        private int fetchInProgress;
 
         public YouTubeChatConnection() : this(null, "single:youtube")
         {
@@ -88,15 +90,32 @@ namespace GTAChaos.Utils
 
         private async void FetchMessagesTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
         {
-            if (!this.isConnected)
-            {
+            if (!this.isConnected || Interlocked.Exchange(ref this.fetchInProgress, 1) != 0)
                 return;
-            }
 
-            List<ChatItem> messages = await this.FetchChat();
-            foreach (ChatItem msg in messages)
+            try
             {
-                this.OnChatMessage(msg);
+                List<ChatItem> messages = await this.FetchChat();
+                if (messages == null || !this.isConnected)
+                    return;
+
+                foreach (ChatItem msg in messages)
+                {
+                    if (!this.isConnected)
+                        break;
+
+                    this.OnChatMessage(msg);
+                }
+            }
+            catch (Exception ex)
+            {
+                // A single transient YouTube response/network failure must not crash
+                // the WinForms process or stop other MultiStream sources.
+                Debug.WriteLine("[YouTube] Chat polling failed: " + ex.GetBaseException().Message);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref this.fetchInProgress, 0);
             }
         }
 
@@ -328,7 +347,15 @@ namespace GTAChaos.Utils
             return elements;
         }
 
-        public void Kill() => this.fetchMessagesTimer?.Stop();
+        public void Kill()
+        {
+            bool wasConnected = this.isConnected;
+            this.isConnected = false;
+            this.fetchMessagesTimer?.Stop();
+
+            if (wasConnected)
+                OnDisconnected?.Invoke(this, EventArgs.Empty);
+        }
 
         public void SendEffectVotingToGame(bool undetermined = true)
         {
