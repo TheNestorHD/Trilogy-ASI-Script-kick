@@ -1825,6 +1825,12 @@ namespace GTAChaos.Forms
             while (Config.Instance().MultiStreamSources.Count < 3)
                 Config.Instance().MultiStreamSources.Add(new Config.MultiStreamSourceConfig());
 
+            for (int i = 0; i < Config.Instance().MultiStreamSources.Count; i++)
+            {
+                if (Config.Instance().MultiStreamSources[i] == null)
+                    Config.Instance().MultiStreamSources[i] = new Config.MultiStreamSourceConfig();
+            }
+
             if (Config.Instance().MultiStreamSources.Count > 3)
                 Config.Instance().MultiStreamSources = Config.Instance().MultiStreamSources.Take(3).ToList();
         }
