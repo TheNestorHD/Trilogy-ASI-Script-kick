@@ -177,7 +177,10 @@ namespace GTAChaos.Utils
                 }
                 else
                 {
-                    if (jsonObject["type"].ToObject<string>() != "time")
+                    string type = jsonObject["type"]?.ToObject<string>() ?? string.Empty;
+                    // Live chat and chat settings should never be replayed later as
+                    // stale backlog. The game requests fresh settings on each connect.
+                    if (type != "time" && type != "chat" && type != "chat-config")
                     {
                         this.socketBuffer.Add(json);
                     }
@@ -195,6 +198,42 @@ namespace GTAChaos.Utils
                     remaining,
                     cooldown,
                     mode
+                }
+            });
+
+            this.SendDataToWebsocket(jsonObject);
+        }
+
+        public void SendStreamChatConfig(bool enabled, bool hideDuringHideChaosGui, int maxMessages, int durationSeconds)
+        {
+            JObject jsonObject = JObject.FromObject(new
+            {
+                type = "chat-config",
+                data = new
+                {
+                    enabled,
+                    hideDuringHideChaosGui,
+                    maxMessages,
+                    durationSeconds
+                }
+            });
+
+            this.SendDataToWebsocket(jsonObject);
+        }
+
+        public void SendChatMessage(string platform, string username, string message)
+        {
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(message))
+                return;
+
+            JObject jsonObject = JObject.FromObject(new
+            {
+                type = "chat",
+                data = new
+                {
+                    platform = platform ?? "Unknown",
+                    username,
+                    message
                 }
             });
 

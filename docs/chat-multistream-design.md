@@ -70,11 +70,12 @@ All game/chat overlay text must be plain text. Strip message spans that the adap
 - The bar belongs to the OBS overlay itself and must continue to work when the Chaos Mod's in-game UI is hidden.
 - Vote counts and options must be the combined totals from the shared voting coordinator.
 
-## Suggested implementation order
+## Implementation status on this branch
 
-1. Add the OBS footer progress strip and remove the Kick-only instruction wording.
-2. Implement the bounded message queue and independent in-game drawing component.
-3. Add the in-game-chat GUI section and persisted settings, including the hide_chaos_ui checkbox.
-4. Introduce normalized chat events in each adapter and the 1–3 source MultiStream manager.
-5. Refactor voting into a shared coordinator so all selected voting sources share candidate options and counts.
-6. Test one source first, then two sources, then three; verify source reconnection, duplicate-vote handling, overlay timer updates, and that no media assets/emotes are drawn in-game.
+- The OBS footer progress strip and platform-neutral instruction are implemented.
+- The GUI includes MultiStream source profiles and a shared voting coordinator, with up to three sources and per-source chat/voting toggles.
+- A native plain-text chat renderer is wired through the existing websocket protocol. The GUI exposes enable/disable, maximum visible messages, message lifetime, and whether chat should hide during `hide_chaos_ui`.
+- Chat messages and chat settings are not buffered while the game is disconnected. When the native client sends its `game` handshake on connect/reconnect, the GUI sends fresh chat settings.
+- YouTube paid-message and membership events are intentionally excluded; platform adapters publish normalized text only.
+
+Build workflows must still be checked, and in-game tests should cover one, two, and three sources; reconnects; vote identity and updates; message expiry; and the hide-UI option.

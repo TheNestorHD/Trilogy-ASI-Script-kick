@@ -30,6 +30,7 @@ namespace GTAChaos.Forms
         private Label labelMultiStreamStatus;
         private Label labelDebugChatStatus;
         private readonly List<MultiStreamSourceControls> multiStreamSourceControls = new List<MultiStreamSourceControls>();
+        private bool singleStreamChatBusSubscribed;
 
         private sealed class MultiStreamSourceControls
         {
@@ -94,6 +95,7 @@ namespace GTAChaos.Forms
 
             WebsocketHandler.INSTANCE.CreateWebsocketServer();
             WebsocketHandler.INSTANCE.OnSocketMessage += this.OnSocketMessage;
+            this.SendStreamChatSettings();
         }
 
         private void Form1_Shown(object sender, EventArgs e)
@@ -106,6 +108,37 @@ namespace GTAChaos.Forms
 
         private void UpdateProgramText() => this.Text = $"GTA Trilogy Chaos Mod v{Shared.GetVersionString(this.debug)} (Port: {Config.Instance().WebsocketPort})";
 
+        private void SendStreamChatSettings()
+        {
+            Config config = Config.Instance();
+            WebsocketHandler.INSTANCE.SendStreamChatConfig(
+                config.StreamChatOverlayEnabled,
+                config.StreamChatHideDuringHideChaosGui,
+                config.StreamChatMaxMessages,
+                config.StreamChatMessageDurationSeconds);
+        }
+
+        private void OnMultiStreamChatMessage(object sender, StreamChatMessageEventArgs e)
+        {
+            if (Config.Instance().StreamChatOverlayEnabled)
+                WebsocketHandler.INSTANCE.SendChatMessage(e.Platform, e.Username, e.Message);
+        }
+
+        private void OnSingleStreamChatMessage(object sender, StreamChatMessageEventArgs e)
+        {
+            if (!Config.Instance().MultiStreamEnabled && Config.Instance().StreamChatOverlayEnabled)
+                WebsocketHandler.INSTANCE.SendChatMessage(e.Platform, e.Username, e.Message);
+        }
+
+        private void DetachStreamChatHandlers()
+        {
+            StreamChatMessageBus.MessageReceived -= this.OnSingleStreamChatMessage;
+            this.singleStreamChatBusSubscribed = false;
+
+            if (this.stream is MultiStreamConnection multiStream)
+                multiStream.ChatMessageReceived -= this.OnMultiStreamChatMessage;
+        }
+
         private void OnSocketMessage(object sender, SocketMessageEventArgs e)
         {
             try
@@ -115,7 +148,13 @@ namespace GTAChaos.Forms
                 string type = Convert.ToString(json["type"]);
                 string state = Convert.ToString(json["state"]);
 
-                if (type == "ChaosMod" && state == "auto_start")
+                if (type == "game")
+                {
+                    // The native game client announces every connect/reconnect. Push
+                    // fresh chat settings here instead of buffering stale configuration.
+                    this.SendStreamChatSettings();
+                }
+                else if (type == "ChaosMod" && state == "auto_start")
                 {
                     if (Shared.Sync == null || Shared.Sync.IsHost)
                     {
@@ -129,6 +168,7 @@ namespace GTAChaos.Forms
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             this.SaveConfig();
+            this.DetachStreamChatHandlers();
             DebugChatCommandHandler.CommandReceived -= this.OnDebugChatCommandReceived;
         }
 
@@ -1091,9 +1131,16 @@ namespace GTAChaos.Forms
                 if (this.tabMultiStreamSettings != null) this.tabMultiStreamSettings.Enabled = !useMultiStream;
 
                 if (useMultiStream)
+                {
                     this.stream = new MultiStreamConnection(Config.Instance().MultiStreamSources);
+                    ((MultiStreamConnection)this.stream).ChatMessageReceived += this.OnMultiStreamChatMessage;
+                }
                 else
+                {
                     this.stream = StreamHandler.GetStreamConnection();
+                    StreamChatMessageBus.MessageReceived += this.OnSingleStreamChatMessage;
+                    this.singleStreamChatBusSubscribed = true;
+                }
 
                 this.stream.OnRapidFireEffect += (_sender, rapidFireArgs) => this.Invoke(new Action(() =>
                 {
@@ -1152,6 +1199,7 @@ namespace GTAChaos.Forms
                         this.comboBoxSettingsStreamMode.Enabled = true;
                         if (this.tabMultiStreamSettings != null) this.tabMultiStreamSettings.Enabled = true;
                     }));
+                    this.DetachStreamChatHandlers();
                     this.stream?.Kill();
                     this.stream = null;
                 };
@@ -1178,6 +1226,7 @@ namespace GTAChaos.Forms
 
                 this.stream.OnDisconnected += (_sender, _e) => this.Invoke(new Action(() =>
                 {
+                    this.DetachStreamChatHandlers();
                     this.stream = null;
 
                     this.buttonSwitchMode.Enabled = true;
@@ -1981,6 +2030,85 @@ namespace GTAChaos.Forms
                 Text = "MultiStream guarda aquí la configuración de las fuentes.",
                 Margin = new Padding(3, 4, 3, 12)
             };
+            var chatGroup = new GroupBox
+            {
+                Text = "Chat dentro del juego",
+                Width = 650,
+                Height = 145,
+                Padding = new Padding(8),
+                Margin = new Padding(3, 3, 3, 10)
+            };
+            var chatContents = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(4)
+            };
+
+            var checkBoxChatOverlayEnabled = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Mostrar mensajes de las fuentes conectadas en GTA",
+                Checked = Config.Instance().StreamChatOverlayEnabled,
+                Margin = new Padding(3, 2, 3, 5)
+            };
+            var checkBoxChatHideDuringHideUi = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Ocultar el chat durante el efecto Hide Chaos Mod GUI",
+                Checked = Config.Instance().StreamChatHideDuringHideChaosGui,
+                Margin = new Padding(3, 2, 3, 5)
+            };
+
+            var chatLimitsRow = new FlowLayoutPanel
+            {
+                Width = 615,
+                Height = 30,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            var maxMessages = new NumericUpDown
+            {
+                Minimum = 1,
+                Maximum = 10,
+                Width = 58,
+                Value = Math.Max(1, Math.Min(10, Config.Instance().StreamChatMaxMessages)),
+                Margin = new Padding(3, 2, 15, 2)
+            };
+            var messageDuration = new NumericUpDown
+            {
+                Minimum = 3,
+                Maximum = 30,
+                Width = 58,
+                Value = Math.Max(3, Math.Min(30, Config.Instance().StreamChatMessageDurationSeconds)),
+                Margin = new Padding(3, 2, 6, 2)
+            };
+            chatLimitsRow.Controls.Add(new Label { Text = "Mensajes visibles:", AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(3, 6, 4, 3) });
+            chatLimitsRow.Controls.Add(maxMessages);
+            chatLimitsRow.Controls.Add(new Label { Text = "Duración (segundos):", AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(3, 6, 4, 3) });
+            chatLimitsRow.Controls.Add(messageDuration);
+
+            Action updateChatSettings = () =>
+            {
+                Config.Instance().StreamChatOverlayEnabled = checkBoxChatOverlayEnabled.Checked;
+                Config.Instance().StreamChatHideDuringHideChaosGui = checkBoxChatHideDuringHideUi.Checked;
+                Config.Instance().StreamChatMaxMessages = (int)maxMessages.Value;
+                Config.Instance().StreamChatMessageDurationSeconds = (int)messageDuration.Value;
+                this.SendStreamChatSettings();
+            };
+            checkBoxChatOverlayEnabled.CheckedChanged += (s, e) => updateChatSettings();
+            checkBoxChatHideDuringHideUi.CheckedChanged += (s, e) => updateChatSettings();
+            maxMessages.ValueChanged += (s, e) => updateChatSettings();
+            messageDuration.ValueChanged += (s, e) => updateChatSettings();
+
+            chatContents.Controls.Add(checkBoxChatOverlayEnabled);
+            chatContents.Controls.Add(checkBoxChatHideDuringHideUi);
+            chatContents.Controls.Add(chatLimitsRow);
+            chatGroup.Controls.Add(chatContents);
+            panel.Controls.Add(chatGroup);
+
             panel.Controls.Add(this.labelMultiStreamStatus);
 
             var saveButton = new Button

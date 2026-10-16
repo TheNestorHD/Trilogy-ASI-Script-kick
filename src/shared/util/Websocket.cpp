@@ -2,6 +2,7 @@
 
 #include "util/Config.h"
 #include "util/EffectHandler.h"
+#include "util/DrawChat.h"
 
 #include <GameVersion.h>
 
@@ -159,6 +160,23 @@ Websocket::CallFunction (std::string text)
                 auto data = json.at ("data");
 
                 EffectHandler::HandleFunction (data);
+            }
+            else if (type == "chat-config")
+            {
+                auto data = json.at ("data");
+                DrawChat::UpdateConfig (
+                    data.value ("enabled", true),
+                    data.value ("hideDuringHideChaosUi", false),
+                    data.value ("maxMessages", 6),
+                    data.value ("durationSeconds", 10));
+            }
+            else if (type == "chat")
+            {
+                auto data = json.at ("data");
+                DrawChat::AddMessage (
+                    data.value ("platform", std::string ("Unknown")),
+                    data.value ("username", std::string ()),
+                    data.value ("message", std::string ()));
             }
         }
     }

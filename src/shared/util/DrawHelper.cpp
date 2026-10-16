@@ -3,6 +3,7 @@
 #include "util/ColorHelper.h"
 #include "util/Config.h"
 #include "util/DrawVoting.h"
+#include "util/DrawChat.h"
 #include "util/EffectDrawHandler.h"
 #include "util/EffectHandler.h"
 #include "util/EffectInstance.h"
@@ -58,6 +59,11 @@ DrawHelper::Draw ()
     DrawVersion ();
 
     if (!CONFIG ("Drawing.Enabled", true)) return;
+
+    // The chat overlay has its own hide-during-Hide-Chaos-GUI setting, so render
+    // it before the legacy early return hides the rest of the Chaos Mod UI.
+    DrawChat::Draw ();
+
     if (Globals::enabledEffects["hide_chaos_ui"]) return;
 
     if (CONFIG ("Drawing.DrawVoting", true))

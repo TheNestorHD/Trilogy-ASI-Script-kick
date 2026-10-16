@@ -54,6 +54,12 @@ namespace GTAChaos.Utils
         // and selected platform chat adapters can accept !chaos <effect_id>.
         public bool DebugChatCommandsEnabled;
 
+        // In-game plain-text stream chat overlay settings.
+        public bool StreamChatOverlayEnabled = true;
+        public bool StreamChatHideDuringHideChaosGui;
+        public int StreamChatMaxMessages = 6;
+        public int StreamChatMessageDurationSeconds = 10;
+
         // MultiStream source profiles. The connection manager will consume these
         // profiles; keeping them in config now lets the GUI persist its setup.
         public bool MultiStreamEnabled;
