@@ -45,11 +45,18 @@ namespace GTAChaos.Utils
                         if (emote == null) continue;
                         PropertyInfo startProperty = emote.GetType().GetProperty("StartIndex");
                         PropertyInfo endProperty = emote.GetType().GetProperty("EndIndex");
+                        PropertyInfo nameProperty = emote.GetType().GetProperty("Name");
                         if (startProperty == null || endProperty == null) continue;
 
                         int start = Convert.ToInt32(startProperty.GetValue(emote, null));
                         int end = Convert.ToInt32(endProperty.GetValue(emote, null));
-                        if (start >= 0 && end >= start && end < message.Length)
+                        if (start < 0 || end < start || end >= message.Length) continue;
+
+                        // Guard against a codepoint/UTF-16 offset mismatch when a
+                        // message contains non-BMP Unicode before the emote.
+                        string emoteName = nameProperty == null ? null : Convert.ToString(nameProperty.GetValue(emote, null));
+                        string textAtSpan = message.Substring(start, end - start + 1);
+                        if (string.IsNullOrEmpty(emoteName) || string.Equals(textAtSpan, emoteName, StringComparison.Ordinal))
                             spans.Add(Tuple.Create(start, end));
                     }
 
@@ -98,9 +105,8 @@ namespace GTAChaos.Utils
                 return false;
 
             string trimmed = message.Trim();
-            if (!trimmed.Equals("!chaos", StringComparison.OrdinalIgnoreCase) &&
-                !trimmed.StartsWith("!chaos ", StringComparison.OrdinalIgnoreCase) &&
-                !trimmed.StartsWith("!chaos\t", StringComparison.OrdinalIgnoreCase))
+            if (!trimmed.StartsWith("!chaos", StringComparison.OrdinalIgnoreCase) ||
+                (trimmed.Length > 6 && !char.IsWhiteSpace(trimmed[6])))
                 return false;
 
             Match match = CommandPattern.Match(trimmed);
