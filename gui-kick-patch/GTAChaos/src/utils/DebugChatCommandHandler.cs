@@ -1,4 +1,7 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace GTAChaos.Utils
@@ -16,6 +19,60 @@ namespace GTAChaos.Utils
             this.Username = username ?? "Unknown";
             this.EffectId = effectId ?? string.Empty;
             this.HasEffectId = hasEffectId;
+        }
+    }
+
+    /// <summary>
+    /// Produces plain text for game overlays. TwitchLib exposes exact emote spans, so
+    /// their text aliases can be removed without downloading/rendering any image assets.
+    /// </summary>
+    public static class ChatTextSanitizer
+    {
+        public static string RemoveTwitchEmoteText(string message, object emoteSet)
+        {
+            if (string.IsNullOrEmpty(message) || emoteSet == null)
+                return NormalizeWhitespace(message);
+
+            try
+            {
+                PropertyInfo emotesProperty = emoteSet.GetType().GetProperty("Emotes");
+                IEnumerable emotes = emotesProperty == null ? null : emotesProperty.GetValue(emoteSet, null) as IEnumerable;
+                if (emotes != null)
+                {
+                    var spans = new List<Tuple<int, int>>();
+                    foreach (object emote in emotes)
+                    {
+                        if (emote == null) continue;
+                        PropertyInfo startProperty = emote.GetType().GetProperty("StartIndex");
+                        PropertyInfo endProperty = emote.GetType().GetProperty("EndIndex");
+                        if (startProperty == null || endProperty == null) continue;
+
+                        int start = Convert.ToInt32(startProperty.GetValue(emote, null));
+                        int end = Convert.ToInt32(endProperty.GetValue(emote, null));
+                        if (start >= 0 && end >= start && end < message.Length)
+                            spans.Add(Tuple.Create(start, end));
+                    }
+
+                    // Remove from right to left so earlier indices remain stable.
+                    spans.Sort((left, right) => right.Item1.CompareTo(left.Item1));
+                    foreach (Tuple<int, int> span in spans)
+                        message = message.Remove(span.Item1, span.Item2 - span.Item1 + 1);
+                }
+            }
+            catch
+            {
+                // A malformed emote span should not discard the entire chat message.
+            }
+
+            return NormalizeWhitespace(message);
+        }
+
+        public static string NormalizeWhitespace(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return string.Empty;
+
+            return Regex.Replace(message.Replace('\r', ' ').Replace('\n', ' '), @"\s+", " ").Trim();
         }
     }
 
