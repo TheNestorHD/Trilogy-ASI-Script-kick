@@ -108,9 +108,18 @@ namespace GTAChaos.Utils
             {
                 try
                 {
+                    string configurationError = ValidateSourceConfiguration(source);
+                    if (!string.IsNullOrWhiteSpace(configurationError))
+                    {
+                        source.Error = configurationError;
+                        return false;
+                    }
+
                     bool result = await source.Connection.TryConnect();
                     if (!result && string.IsNullOrWhiteSpace(source.Error))
                         source.Error = GetSourceError(source.Connection);
+                    else if (result)
+                        source.Error = string.Empty;
                     return result;
                 }
                 catch (Exception ex)
@@ -271,6 +280,34 @@ namespace GTAChaos.Utils
             }
             if (notify)
                 this.OnDisconnected?.Invoke(this, EventArgs.Empty);
+        }
+
+        private static string ValidateSourceConfiguration(SourceEntry source)
+        {
+            if (source == null || source.Config == null)
+                return "La configuración de esta fuente está vacía.";
+
+            string platform = (source.Config.Platform ?? string.Empty).Trim();
+            if (string.Equals(platform, "Twitch", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(source.Config.ClientID) &&
+                    string.IsNullOrWhiteSpace(source.Config.AccessToken))
+                    return "Faltan el Client ID y el token de acceso de Twitch.";
+                if (string.IsNullOrWhiteSpace(source.Config.ClientID))
+                    return "Falta el Client ID de Twitch.";
+                if (string.IsNullOrWhiteSpace(source.Config.AccessToken))
+                    return "Falta el token de acceso de Twitch.";
+            }
+
+            if (string.Equals(platform, "YouTube", StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(source.Config.Channel))
+                return "Falta el ID del directo de YouTube.";
+
+            if (string.Equals(platform, "Kick", StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(source.Config.Channel))
+                return "Falta el nombre del canal de Kick.";
+
+            return string.Empty;
         }
 
         private static string GetSourceError(IStreamConnection connection)
