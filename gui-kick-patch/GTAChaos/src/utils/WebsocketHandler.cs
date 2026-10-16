@@ -212,7 +212,7 @@ namespace GTAChaos.Utils
                 data = new
                 {
                     enabled,
-                    hideDuringHideChaosGui,
+                    hideDuringHideChaosUi = hideDuringHideChaosGui,
                     maxMessages,
                     durationSeconds
                 }
