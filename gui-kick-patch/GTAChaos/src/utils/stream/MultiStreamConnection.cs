@@ -79,7 +79,7 @@ namespace GTAChaos.Utils
 
                 connection.OnConnected += (sender, args) => this.HandleSourceConnected(entry);
                 connection.OnDisconnected += (sender, args) => this.HandleSourceDisconnected(entry);
-                connection.OnLoginError += (sender, args) => entry.Error = this.GetSourceError(connection);
+                connection.OnLoginError += (sender, args) => entry.Error = GetSourceError(connection);
                 connection.OnRapidFireEffect += (sender, args) =>
                 {
                     if (profile.UseForVoting)
@@ -110,7 +110,7 @@ namespace GTAChaos.Utils
                 {
                     bool result = await source.Connection.TryConnect();
                     if (!result && string.IsNullOrWhiteSpace(source.Error))
-                        source.Error = this.GetSourceError(source.Connection);
+                        source.Error = GetSourceError(source.Connection);
                     return result;
                 }
                 catch (Exception ex)
