@@ -22,6 +22,8 @@ namespace GTAChaos.Utils
         // Read Kick's rendered chat through the browser session instead of opening
         // a separate raw Pusher connection. This uses the same page the user sees.
         private readonly string channelSlug;
+        private readonly Config.MultiStreamSourceConfig sourceConfig;
+        private readonly string sourceKey;
         private volatile bool isConnected;
         private TaskCompletionSource<bool> subscriptionReady;
         private KickChatBrowserForm browserForm;
@@ -39,9 +41,16 @@ namespace GTAChaos.Utils
         private readonly ChatEffectVoting effectVoting = new ChatEffectVoting();
         private readonly HashSet<string> rapidFireVoters = new HashSet<string>();
 
-        public KickChatConnection()
+        public KickChatConnection() : this(null, "single:kick")
         {
-            this.channelSlug = (Config.Instance().StreamClientID ?? string.Empty)
+        }
+
+        public KickChatConnection(Config.MultiStreamSourceConfig sourceConfig, string sourceKey)
+        {
+            this.sourceConfig = sourceConfig;
+            this.sourceKey = string.IsNullOrWhiteSpace(sourceKey) ? "single:kick" : sourceKey;
+            string configuredChannel = sourceConfig == null ? Config.Instance().StreamClientID : sourceConfig.Channel;
+            this.channelSlug = (configuredChannel ?? string.Empty)
                 .Trim().TrimStart('@').Trim().TrimEnd('/');
         }
 
@@ -142,6 +151,15 @@ namespace GTAChaos.Utils
             if (DebugChatCommandHandler.TryHandle("Kick", username, content))
                 return;
 
+            string plainText = ChatTextSanitizer.NormalizeWhitespace(content);
+            if (string.IsNullOrWhiteSpace(plainText))
+                return;
+
+            StreamChatMessageBus.Publish(this.sourceKey, "Kick", this.channelSlug, username, plainText);
+            if (MultiStreamVotingCoordinator.IsActive)
+                return;
+
+            content = plainText;
             JObject payload = new JObject();
             payload["id"] = string.IsNullOrWhiteSpace(id)
                 ? Guid.NewGuid().ToString("N")
@@ -622,6 +640,9 @@ namespace GTAChaos.Utils
 
         public List<IVotingElement> GetVotedEffects()
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+                return MultiStreamVotingCoordinator.GetVotedEffects();
+
             this.lastChoice = VoteChoice.NONE;
 
             List<IVotingElement> elements = Config.Instance().StreamMajorityVotes ? this.effectVoting.GetMajorityVotes() : this.effectVoting.GetTrulyRandomVotes();
@@ -658,6 +679,12 @@ namespace GTAChaos.Utils
 
         public void SendEffectVotingToGame(bool undetermined = true)
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+            {
+                MultiStreamVotingCoordinator.SendEffectVotingToGame(undetermined);
+                return;
+            }
+
             if (this.effectVoting.IsEmpty())
             {
                 return;
@@ -684,6 +711,14 @@ namespace GTAChaos.Utils
             }
         }
 
+        private void SetMultiStreamVoting(Shared.VOTING_MODE votingMode, int untilRapidFire, List<IVotingElement> votingElements)
+        {
+            this.VotingMode = votingMode;
+            MultiStreamVotingCoordinator.SetVotingMode(votingMode);
+            this.lastChoice = votingMode == Shared.VOTING_MODE.VOTING
+                ? VoteChoice.UNDETERMINED : VoteChoice.NONE;
+        }
+
         private void SendMessage(string text)
         {
             // Empty method because we are just a chat listener
@@ -691,6 +726,12 @@ namespace GTAChaos.Utils
 
         public void SetVoting(Shared.VOTING_MODE votingMode, int untilRapidFire = -1, List<IVotingElement> votingElements = null)
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+            {
+                this.SetMultiStreamVoting(votingMode, untilRapidFire, votingElements);
+                return;
+            }
+
             this.VotingMode = votingMode;
 
             if (this.VotingMode == Shared.VOTING_MODE.VOTING)
