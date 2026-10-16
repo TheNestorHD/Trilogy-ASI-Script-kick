@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+using namespace plugin;
+
 std::string
 DrawChat::ToGameText (const std::string &text)
 {
@@ -146,7 +148,7 @@ DrawChat::Draw ()
     const float padding = SCREEN_COORD (5.0f);
 
     CRect background (x - padding, y - padding,
-                      x + width, y + rowHeight * visibleMessages.size () + padding);
+                      x + width, y + rowHeight * static_cast<float> (visibleMessages.size ()) + padding);
     CSprite2d::DrawRect (background, CRGBA (0, 0, 0, 175));
 
     for (size_t i = 0; i < visibleMessages.size (); ++i)
