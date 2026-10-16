@@ -263,8 +263,10 @@ namespace GTAChaos.Utils
         private void OnChatMessage(ChatItem chatItem)
         {
             string username = chatItem.Author;
-            string rawMessage = chatItem.Message ?? string.Empty;
+            string rawMessage = ChatTextSanitizer.NormalizeWhitespace(chatItem.Message);
             if (DebugChatCommandHandler.TryHandle("YouTube", username, rawMessage))
+                return;
+            if (string.IsNullOrWhiteSpace(rawMessage))
                 return;
             string message = this.RemoveSpecialCharacters(rawMessage, true);
 
