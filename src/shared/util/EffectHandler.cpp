@@ -2,6 +2,7 @@
 
 #include "util/Config.h"
 #include "util/EffectDatabase.h"
+#include "util/TextEncoding.h"
 #include "util/EffectInstance.h"
 #include "util/Globals.h"
 
@@ -171,9 +172,12 @@ EffectHandler::QueueEffect (EffectBase *effect, const nlohmann::json &data)
             inst.SetCustomData (data["effectData"]);
 
         if (data.contains ("displayName"))
-            inst.OverrideName (data["displayName"]);
+            inst.OverrideName (TextEncoding::ToGameText (
+                data["displayName"].get<std::string> ()));
 
-        if (data.contains ("subtext")) inst.SetSubtext (data["subtext"]);
+        if (data.contains ("subtext"))
+            inst.SetSubtext (TextEncoding::ToGameText (
+                data["subtext"].get<std::string> ()));
 
         if (CONFIG ("Chaos.PlayEffectSound", true))
         {

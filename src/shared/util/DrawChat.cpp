@@ -2,9 +2,9 @@
 
 #include "util/GenericUtil.h"
 #include "util/Globals.h"
+#include "util/TextEncoding.h"
 
 #include <CFont.h>
-#include <Windows.h>
 #include <extensions/FontPrint.h>
 
 #include <algorithm>
@@ -12,51 +12,6 @@
 #include <vector>
 
 using namespace plugin;
-
-std::string
-DrawChat::ToGameText (const std::string &text)
-{
-    if (text.empty ()) return {};
-
-    int wideLength = MultiByteToWideChar (
-        CP_UTF8, MB_ERR_INVALID_CHARS, text.data (),
-        static_cast<int> (text.size ()), nullptr, 0);
-
-    if (wideLength <= 0)
-    {
-        std::string ascii;
-        ascii.reserve (text.size ());
-        for (unsigned char c : text)
-            if (c >= 0x20 && c < 0x7F) ascii.push_back (static_cast<char> (c));
-        return ascii;
-    }
-
-    std::wstring wide (static_cast<size_t> (wideLength), L'\0');
-    if (!MultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, text.data (),
-                              static_cast<int> (text.size ()), wide.data (),
-                              wideLength))
-        return {};
-
-    int outputLength = WideCharToMultiByte (
-        1252, 0, wide.data (), wideLength, nullptr, 0, "?", nullptr);
-    if (outputLength <= 0) return {};
-
-    std::string converted (static_cast<size_t> (outputLength), '\0');
-    if (!WideCharToMultiByte (1252, 0, wide.data (), wideLength,
-                              converted.data (), outputLength, "?", nullptr))
-        return {};
-
-    // GTA's classic font expects a single-byte game code page. Drop control
-    // characters and normalize tabs so each chat post occupies one row.
-    std::string clean;
-    clean.reserve (converted.size ());
-    for (unsigned char c : converted)
-    {
-        if (c == '\t') clean.push_back (' ');
-        else if (c >= 0x20) clean.push_back (static_cast<char> (c));
-    }
-    return clean;
-}
 
 void
 DrawChat::PruneExpiredLocked (std::chrono::steady_clock::time_point now)
@@ -67,6 +22,59 @@ DrawChat::PruneExpiredLocked (std::chrono::steady_clock::time_point now)
 
     while (static_cast<int> (messages.size ()) > maxMessages)
         messages.pop_front ();
+}
+
+std::vector<std::string>
+DrawChat::WrapMessage (const std::string &prefix, const std::string &message)
+{
+    // Text is converted to the game's single-byte encoding before wrapping.
+    // This prevents UTF-8 continuation bytes from counting as extra glyphs.
+    constexpr size_t maxLineCharacters = 84;
+    constexpr size_t maxLinesPerMessage = 7;
+
+    std::vector<std::string> lines;
+    std::string remaining = message;
+    const size_t firstCapacity
+        = maxLineCharacters > prefix.size () ? maxLineCharacters - prefix.size ()
+                                             : 1;
+
+    while (!remaining.empty () && lines.size () < maxLinesPerMessage)
+    {
+        const bool firstLine = lines.empty ();
+        const size_t capacity = firstLine ? firstCapacity : maxLineCharacters - 2;
+        std::string segment;
+
+        if (remaining.size () <= capacity)
+        {
+            segment = std::move (remaining);
+            remaining.clear ();
+        }
+        else
+        {
+            size_t split = remaining.find_last_of (" ", capacity);
+            if (split == std::string::npos || split == 0)
+                split = capacity;
+
+            segment = remaining.substr (0, split);
+            remaining.erase (0, split);
+            while (!remaining.empty () && remaining.front () == ' ')
+                remaining.erase (remaining.begin ());
+        }
+
+        lines.push_back ((firstLine ? prefix : "  ") + segment);
+    }
+
+    // If an unusually long post exceeds the per-message row limit, mark the
+    // continuation instead of silently cutting it off at the end of row one.
+    if (!remaining.empty () && !lines.empty ())
+    {
+        std::string &lastLine = lines.back ();
+        if (lastLine.size () > maxLineCharacters - 3)
+            lastLine.resize (maxLineCharacters - 3);
+        lastLine.append ("...");
+    }
+
+    return lines;
 }
 
 void
@@ -88,9 +96,10 @@ DrawChat::AddMessage (const std::string &platform,
                       const std::string &username,
                       const std::string &message)
 {
-    std::string cleanUsername = ToGameText (username);
-    std::string cleanMessage = ToGameText (message);
-    std::string cleanPlatform = ToGameText (platform.empty () ? "Chat" : platform);
+    std::string cleanUsername = TextEncoding::ToGameText (username);
+    std::string cleanMessage = TextEncoding::ToGameText (message);
+    std::string cleanPlatform
+        = TextEncoding::ToGameText (platform.empty () ? "Chat" : platform);
 
     auto isBlank = [] (const std::string &value)
     {
@@ -101,21 +110,17 @@ DrawChat::AddMessage (const std::string &platform,
     if (cleanPlatform.size () > 12) cleanPlatform.resize (12);
     if (cleanUsername.size () > 24) cleanUsername.resize (24);
 
-    std::string line = "[" + cleanPlatform + "] " + cleanUsername + ": "
-                       + cleanMessage;
-    constexpr size_t maxLineLength = 112;
-    if (line.size () > maxLineLength)
-    {
-        line.resize (maxLineLength - 3);
-        line.append ("...");
-    }
+    const std::string prefix
+        = "[" + cleanPlatform + "] " + cleanUsername + ": ";
+    std::vector<std::string> lines = WrapMessage (prefix, cleanMessage);
+    if (lines.empty ()) return;
 
     std::lock_guard<std::mutex> lock (mutex);
     if (!enabled) return;
 
     const auto now = std::chrono::steady_clock::now ();
     PruneExpiredLocked (now);
-    messages.push_back ({ std::move (line), now });
+    messages.push_back ({ std::move (lines), now });
     while (static_cast<int> (messages.size ()) > maxMessages)
         messages.pop_front ();
 }
@@ -125,21 +130,28 @@ DrawChat::Draw ()
 {
     if (GenericUtil::IsMenuActive ()) return;
 
-    std::vector<std::string> visibleMessages;
+    std::vector<std::string> visibleLines;
     bool hideDuringHideUi = false;
     {
         std::lock_guard<std::mutex> lock (mutex);
         if (!enabled) return;
 
         PruneExpiredLocked (std::chrono::steady_clock::now ());
-        visibleMessages.reserve (messages.size ());
-        for (const auto &line : messages)
-            visibleMessages.push_back (line.Text);
+        for (const auto &message : messages)
+            visibleLines.insert (visibleLines.end (), message.Lines.begin (),
+                                 message.Lines.end ());
         hideDuringHideUi = hideDuringHideChaosUi;
     }
 
-    if (visibleMessages.empty ()) return;
+    if (visibleLines.empty ()) return;
     if (hideDuringHideUi && Globals::enabledEffects["hide_chaos_ui"]) return;
+
+    // Bound panel height and retain the newest rows when several long messages
+    // arrive together. The configured message count/lifetime still use messages.
+    constexpr size_t maxVisibleRows = 16;
+    if (visibleLines.size () > maxVisibleRows)
+        visibleLines.erase (visibleLines.begin (),
+                            visibleLines.end () - maxVisibleRows);
 
     const float x = SCREEN_COORD_LEFT (14.0f);
     const float y = SCREEN_COORD_TOP (48.0f);
@@ -147,15 +159,16 @@ DrawChat::Draw ()
     const float width = SCREEN_COORD (545.0f);
     const float padding = SCREEN_COORD (5.0f);
 
-    CRect background (x - padding, y - padding,
-                      x + width, y + rowHeight * static_cast<float> (visibleMessages.size ()) + padding);
+    CRect background (
+        x - padding, y - padding, x + width,
+        y + rowHeight * static_cast<float> (visibleLines.size ()) + padding);
     CSprite2d::DrawRect (background, CRGBA (0, 0, 0, 175));
 
-    for (size_t i = 0; i < visibleMessages.size (); ++i)
+    for (size_t i = 0; i < visibleLines.size (); ++i)
     {
         const float lineY = y + rowHeight * static_cast<float> (i);
         gamefont::PrintUnscaled (
-            visibleMessages[i], x, lineY, FONT_DEFAULT,
+            visibleLines[i], x, lineY, FONT_DEFAULT,
             SCREEN_MULTIPLIER (0.42f), SCREEN_MULTIPLIER (0.65f),
             color::White, gamefont::AlignLeft, 1, color::Black, true);
     }

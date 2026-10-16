@@ -77,5 +77,7 @@ All game/chat overlay text must be plain text. Strip message spans that the adap
 - A native plain-text chat renderer is wired through the existing websocket protocol. The GUI exposes enable/disable, maximum visible messages, message lifetime, and whether chat should hide during `hide_chaos_ui`.
 - Chat messages and chat settings are not buffered while the game is disconnected. When the native client sends its `game` handshake on connect/reconnect, the GUI sends fresh chat settings.
 - YouTube paid-message and membership events are intentionally excluded; platform adapters publish normalized text only.
+- Chat rows use word wrapping and a bounded panel height instead of truncating each message to one line.
+- UTF-8 text is converted to the game's Western single-byte font encoding before drawing, including voting option names and active-effect names/subtext.
 
 Build workflows must still be checked, and in-game tests should cover one, two, and three sources; reconnects; vote identity and updates; message expiry; and the hide-UI option.

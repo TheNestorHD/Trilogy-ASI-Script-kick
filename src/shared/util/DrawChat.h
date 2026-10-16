@@ -4,12 +4,13 @@
 #include <deque>
 #include <mutex>
 #include <string>
+#include <vector>
 
 class DrawChat
 {
     struct ChatLine
     {
-        std::string Text;
+        std::vector<std::string> Lines;
         std::chrono::steady_clock::time_point CreatedAt;
     };
 
@@ -20,7 +21,8 @@ class DrawChat
     static inline int maxMessages = 6;
     static inline int durationSeconds = 10;
 
-    static std::string ToGameText (const std::string &text);
+    static std::vector<std::string> WrapMessage (const std::string &prefix,
+                                                 const std::string &message);
     static void PruneExpiredLocked (std::chrono::steady_clock::time_point now);
 
 public:

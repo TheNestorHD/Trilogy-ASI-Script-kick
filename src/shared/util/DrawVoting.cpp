@@ -3,6 +3,7 @@
 #include "util/ColorHelper.h"
 #include "util/Config.h"
 #include "util/Globals.h"
+#include "util/TextEncoding.h"
 
 static const float TEXT_SCALE_X = 0.6f;
 static const float TEXT_SCALE_Y = 0.8f;
@@ -105,7 +106,8 @@ DrawVoting::UpdateVotes (std::vector<std::string> effects,
     totalVotes = 0;
     for (int i = 0; i < 3; i++)
     {
-        votes[i] = VotingElement (effects[i], _votes[i], votes[i].offset);
+        votes[i] = VotingElement (TextEncoding::ToGameText (effects[i]),
+                                  _votes[i], votes[i].offset);
 
         if (votes[i].votes > 0) totalVotes += votes[i].votes;
     }
