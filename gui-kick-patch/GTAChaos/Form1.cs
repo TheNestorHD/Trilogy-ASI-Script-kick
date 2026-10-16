@@ -1081,9 +1081,10 @@ namespace GTAChaos.Forms
 
                 this.comboBoxSettingsStreamMode.Enabled = false;
 
-                this.stream = useMultiStream
-                    ? new MultiStreamConnection(Config.Instance().MultiStreamSources)
-                    : StreamHandler.GetStreamConnection();
+                if (useMultiStream)
+                    this.stream = new MultiStreamConnection(Config.Instance().MultiStreamSources);
+                else
+                    this.stream = StreamHandler.GetStreamConnection();
 
                 this.stream.OnRapidFireEffect += (_sender, rapidFireArgs) => this.Invoke(new Action(() =>
                 {
