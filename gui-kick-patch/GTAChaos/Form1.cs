@@ -1055,11 +1055,20 @@ namespace GTAChaos.Forms
                 return;
             }
 
-            // If there is something in the Client ID field
-            if (!string.IsNullOrEmpty(Config.Instance().StreamClientID))
+            // Use profile-based MultiStream when enabled; otherwise preserve legacy single-source mode.
+            bool useMultiStream = Config.Instance().MultiStreamEnabled;
+            bool hasValidMultiStreamSource = Config.Instance().MultiStreamSources != null &&
+                Config.Instance().MultiStreamSources.Any(source =>
+                    source != null && source.Enabled && (source.UseForChat || source.UseForVoting) &&
+                    !string.IsNullOrWhiteSpace(source.Channel) &&
+                    (!string.Equals(source.Platform, "Twitch", StringComparison.OrdinalIgnoreCase) ||
+                     (!string.IsNullOrWhiteSpace(source.ClientID) && !string.IsNullOrWhiteSpace(source.AccessToken))));
+
+            if ((useMultiStream && hasValidMultiStreamSource) ||
+                (!useMultiStream && !string.IsNullOrEmpty(Config.Instance().StreamClientID)))
             {
-                // If the mode is Twitch and the Access Token field is empty
-                if (StreamHandler.IsTwitchMode() && string.IsNullOrEmpty(Config.Instance().StreamAccessToken))
+                // Legacy Twitch mode needs credentials; MultiStream validates each Twitch profile separately.
+                if (!useMultiStream && StreamHandler.IsTwitchMode() && string.IsNullOrEmpty(Config.Instance().StreamAccessToken))
                 {
                     return;
                 }
@@ -1072,7 +1081,9 @@ namespace GTAChaos.Forms
 
                 this.comboBoxSettingsStreamMode.Enabled = false;
 
-                this.stream = StreamHandler.GetStreamConnection();
+                this.stream = useMultiStream
+                    ? new MultiStreamConnection(Config.Instance().MultiStreamSources)
+                    : StreamHandler.GetStreamConnection();
 
                 this.stream.OnRapidFireEffect += (_sender, rapidFireArgs) => this.Invoke(new Action(() =>
                 {
@@ -1099,7 +1110,14 @@ namespace GTAChaos.Forms
                     string errorTitle = "Stream Login Error";
                     string errorMessage = "There was an error trying to log in to the account. Invalid Access Token?";
 
-                    if (_sender is KickChatConnection kickConnection)
+                    if (_sender is MultiStreamConnection multiStreamConnection)
+                    {
+                        errorTitle = "MultiStream Connection Error";
+                        errorMessage = string.IsNullOrWhiteSpace(multiStreamConnection.LastError)
+                            ? "No se pudo conectar ninguna fuente MultiStream. Revisá los canales y credenciales."
+                            : multiStreamConnection.LastError;
+                    }
+                    else if (_sender is KickChatConnection kickConnection)
                     {
                         errorTitle = "Kick Chat Connection Error";
                         string details = string.IsNullOrWhiteSpace(kickConnection.LastError)
@@ -1140,6 +1158,11 @@ namespace GTAChaos.Forms
                     this.checkBoxTwitchUsePolls.Enabled = false;
 
                     this.comboBoxSettingsStreamMode.Enabled = false;
+
+                    if (this.stream is MultiStreamConnection multiStream)
+                    {
+                        this.labelMultiStreamStatus.Text = multiStream.GetStatusSummary();
+                    }
                 }));
 
                 this.stream.OnDisconnected += (_sender, _e) => this.Invoke(new Action(() =>
@@ -1176,16 +1199,20 @@ namespace GTAChaos.Forms
 
         private void UpdateStreamConnectButtonState()
         {
-            bool enabled = true;
-
-            if (string.IsNullOrEmpty(Config.Instance().StreamClientID))
+            bool enabled;
+            if (Config.Instance().MultiStreamEnabled)
             {
-                enabled = false;
+                enabled = Config.Instance().MultiStreamSources != null &&
+                    Config.Instance().MultiStreamSources.Any(source =>
+                        source != null && source.Enabled && (source.UseForChat || source.UseForVoting) &&
+                        !string.IsNullOrWhiteSpace(source.Channel) &&
+                        (!string.Equals(source.Platform, "Twitch", StringComparison.OrdinalIgnoreCase) ||
+                         (!string.IsNullOrWhiteSpace(source.ClientID) && !string.IsNullOrWhiteSpace(source.AccessToken))));
             }
-
-            if (string.IsNullOrEmpty(Config.Instance().StreamAccessToken) && StreamHandler.IsTwitchMode())
+            else
             {
-                enabled = false;
+                enabled = !string.IsNullOrEmpty(Config.Instance().StreamClientID) &&
+                    (!string.IsNullOrEmpty(Config.Instance().StreamAccessToken) || !StreamHandler.IsTwitchMode());
             }
 
             this.buttonConnectStream.Enabled = enabled;
@@ -1859,6 +1886,7 @@ namespace GTAChaos.Forms
             {
                 Config.Instance().MultiStreamEnabled = this.checkBoxMultiStreamEnabled.Checked;
                 this.UpdateMultiStreamStatus();
+                this.UpdateStreamConnectButtonState();
             };
             panel.Controls.Add(this.checkBoxMultiStreamEnabled);
 
@@ -1998,6 +2026,7 @@ namespace GTAChaos.Forms
             config.UseForChat = controls.UseForChat.Checked;
             config.UseForVoting = controls.UseForVoting.Checked;
             this.UpdateMultiStreamStatus();
+            this.UpdateStreamConnectButtonState();
         }
 
         private void UpdateMultiStreamStatus()
