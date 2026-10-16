@@ -25,6 +25,8 @@ namespace GTAChaos.Utils
         }
 
         private readonly string liveId;
+        private readonly Config.MultiStreamSourceConfig sourceConfig;
+        private readonly string sourceKey;
 
         private string isReplay;
         private string apiKey;
@@ -40,9 +42,15 @@ namespace GTAChaos.Utils
 
         private readonly System.Timers.Timer fetchMessagesTimer;
 
-        public YouTubeChatConnection()
+        public YouTubeChatConnection() : this(null, "single:youtube")
         {
-            this.liveId = Config.Instance().StreamClientID;
+        }
+
+        public YouTubeChatConnection(Config.MultiStreamSourceConfig sourceConfig, string sourceKey)
+        {
+            this.sourceConfig = sourceConfig;
+            this.sourceKey = string.IsNullOrWhiteSpace(sourceKey) ? "single:youtube" : sourceKey;
+            this.liveId = sourceConfig == null ? Config.Instance().StreamClientID : sourceConfig.Channel;
 
             if (string.IsNullOrEmpty(this.liveId))
             {
@@ -268,6 +276,11 @@ namespace GTAChaos.Utils
                 return;
             if (string.IsNullOrWhiteSpace(rawMessage))
                 return;
+
+            StreamChatMessageBus.Publish(this.sourceKey, "YouTube", this.liveId, username, rawMessage);
+            if (MultiStreamVotingCoordinator.IsActive)
+                return;
+
             string message = this.RemoveSpecialCharacters(rawMessage, true);
 
             if (this.VotingMode == Shared.VOTING_MODE.RAPID_FIRE)
@@ -317,6 +330,9 @@ namespace GTAChaos.Utils
 
         public List<IVotingElement> GetVotedEffects()
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+                return MultiStreamVotingCoordinator.GetVotedEffects();
+
             this.lastChoice = VoteChoice.NONE;
 
             List<IVotingElement> elements = Config.Instance().StreamMajorityVotes ? this.effectVoting.GetMajorityVotes() : this.effectVoting.GetTrulyRandomVotes();
@@ -334,6 +350,12 @@ namespace GTAChaos.Utils
 
         public void SendEffectVotingToGame(bool undetermined = true)
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+            {
+                MultiStreamVotingCoordinator.SendEffectVotingToGame(undetermined);
+                return;
+            }
+
             if (this.effectVoting.IsEmpty())
             {
                 return;
@@ -351,6 +373,14 @@ namespace GTAChaos.Utils
             }
         }
 
+        private void SetMultiStreamVoting(Shared.VOTING_MODE votingMode, int untilRapidFire, List<IVotingElement> votingElements)
+        {
+            this.VotingMode = votingMode;
+            MultiStreamVotingCoordinator.SetVotingMode(votingMode);
+            this.lastChoice = votingMode == Shared.VOTING_MODE.VOTING
+                ? VoteChoice.UNDETERMINED : VoteChoice.NONE;
+        }
+
         private void SendMessage(string text)
         {
             // Empty method because we are just a chat listener
@@ -358,6 +388,12 @@ namespace GTAChaos.Utils
 
         public void SetVoting(Shared.VOTING_MODE votingMode, int untilRapidFire = -1, List<IVotingElement> votingElements = null)
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+            {
+                this.SetMultiStreamVoting(votingMode, untilRapidFire, votingElements);
+                return;
+            }
+
             this.VotingMode = votingMode;
 
             if (this.VotingMode == Shared.VOTING_MODE.VOTING)
