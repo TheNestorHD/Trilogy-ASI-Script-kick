@@ -352,6 +352,13 @@ namespace GTAChaos.Forms
 
         private void OnTimerTick(object sender, EventArgs e)
         {
+            if (this.stream is MultiStreamConnection multiStream)
+            {
+                string summary = multiStream.GetStatusSummary();
+                if (this.labelMultiStreamStatus.Text != summary)
+                    this.labelMultiStreamStatus.Text = summary;
+            }
+
             // Developer testing mode freezes the automatic counter in both normal
             // and stream modes. Chat commands can still trigger individual effects.
             if (Config.Instance().DebugChatCommandsEnabled)
@@ -1044,6 +1051,7 @@ namespace GTAChaos.Forms
                 this.checkBoxTwitchUsePolls.Enabled = true;
 
                 this.buttonConnectStream.Text = "Connect to Stream";
+                if (this.tabMultiStreamSettings != null) this.tabMultiStreamSettings.Enabled = true;
 
                 if (!this.tabs.TabPages.Contains(this.tabEffects))
                 {
@@ -1080,6 +1088,7 @@ namespace GTAChaos.Forms
                 this.textBoxStreamClientID.Enabled = false;
 
                 this.comboBoxSettingsStreamMode.Enabled = false;
+                if (this.tabMultiStreamSettings != null) this.tabMultiStreamSettings.Enabled = !useMultiStream;
 
                 if (useMultiStream)
                     this.stream = new MultiStreamConnection(Config.Instance().MultiStreamSources);
@@ -1141,6 +1150,7 @@ namespace GTAChaos.Forms
                         this.textBoxStreamClientID.Enabled = true;
 
                         this.comboBoxSettingsStreamMode.Enabled = true;
+                        if (this.tabMultiStreamSettings != null) this.tabMultiStreamSettings.Enabled = true;
                     }));
                     this.stream?.Kill();
                     this.stream = null;
@@ -1183,6 +1193,7 @@ namespace GTAChaos.Forms
                     this.checkBoxTwitchUsePolls.Enabled = true;
 
                     this.comboBoxSettingsStreamMode.Enabled = true;
+                    if (this.tabMultiStreamSettings != null) this.tabMultiStreamSettings.Enabled = true;
 
                     this.buttonConnectStream.Text = "Connect to Stream";
 
@@ -2042,7 +2053,7 @@ namespace GTAChaos.Forms
                 ? "MultiStream está desactivado. Los perfiles quedan guardados, pero no se conectan."
                 : enabled == 0
                     ? "Activaste MultiStream, pero todavía no hay fuentes habilitadas."
-                    : enabled + " fuente(s) configurada(s). La conexión simultánea se integrará en la siguiente etapa; por ahora sigue disponible el conector individual actual.";
+                    : enabled + " fuente(s) habilitada(s). MultiStream se conecta al pulsar «Connect to Stream» en la pestaña Stream.";
         }
 
         // -------------------- Debug chat commands --------------------
