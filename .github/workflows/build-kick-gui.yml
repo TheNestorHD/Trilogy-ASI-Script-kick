@@ -39,6 +39,10 @@ jobs:
           Copy-Item "gui-kick-patch/GTAChaos/packages.config" "$root/GTAChaos/packages.config" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/StreamHandler.cs" "$root/GTAChaos/src/utils/stream/StreamHandler.cs" -Force
           Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/KickChatConnection.cs" "$root/GTAChaos/src/utils/stream/KickChatConnection.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/DebugChatCommandHandler.cs" "$root/GTAChaos/src/utils/DebugChatCommandHandler.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/TwitchChatConnection.cs" "$root/GTAChaos/src/utils/stream/TwitchChatConnection.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/TwitchPollConnection.cs" "$root/GTAChaos/src/utils/stream/TwitchPollConnection.cs" -Force
+          Copy-Item "gui-kick-patch/GTAChaos/src/utils/stream/YouTubeChatConnection.cs" "$root/GTAChaos/src/utils/stream/YouTubeChatConnection.cs" -Force
           Copy-Item "gui-kick-patch/obs-voting-overlay.html" "$root/obs-voting-overlay.html" -Force
           Copy-Item "gui-kick-patch/UPSTREAM.md" "$root/KICK_CHAT_README.md" -Force
 
