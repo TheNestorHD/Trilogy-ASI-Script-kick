@@ -64,7 +64,13 @@ DrawHelper::Draw ()
     // it before the legacy early return hides the rest of the Chaos Mod UI.
     DrawChat::Draw ();
 
-    if (Globals::enabledEffects["hide_chaos_ui"]) return;
+    if (Globals::enabledEffects["hide_chaos_ui"])
+    {
+        // DrawChat uses the game's font queue; flush it even while the rest of
+        // the Chaos Mod interface is hidden, or chat text would never appear.
+        CFont::DrawFonts ();
+        return;
+    }
 
     if (CONFIG ("Drawing.DrawVoting", true))
     {
