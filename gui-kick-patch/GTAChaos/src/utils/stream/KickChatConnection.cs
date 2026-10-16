@@ -138,6 +138,10 @@ namespace GTAChaos.Utils
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(content))
                 return;
 
+            // Consume the opt-in developer command before voting parses ordinary chat.
+            if (DebugChatCommandHandler.TryHandle("Kick", username, content))
+                return;
+
             JObject payload = new JObject();
             payload["id"] = string.IsNullOrWhiteSpace(id)
                 ? Guid.NewGuid().ToString("N")
