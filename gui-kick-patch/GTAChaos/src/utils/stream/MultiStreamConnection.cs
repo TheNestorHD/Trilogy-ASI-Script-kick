@@ -313,9 +313,14 @@ namespace GTAChaos.Utils
         private static string GetSourceError(IStreamConnection connection)
         {
             KickChatConnection kick = connection as KickChatConnection;
-            return kick != null && !string.IsNullOrWhiteSpace(kick.LastError)
-                ? kick.LastError
-                : "No se pudo conectar a esta fuente.";
+            if (kick != null && !string.IsNullOrWhiteSpace(kick.LastError))
+                return kick.LastError;
+
+            YouTubeChatConnection youtube = connection as YouTubeChatConnection;
+            if (youtube != null && !string.IsNullOrWhiteSpace(youtube.LastError))
+                return youtube.LastError;
+
+            return "No se pudo conectar a esta fuente.";
         }
     }
 }

@@ -67,11 +67,33 @@ namespace GTAChaos.Utils
             this.fetchMessagesTimer.Elapsed += this.FetchMessagesTimer_Elapsed;
         }
 
+        public string LastError { get; private set; } = string.Empty;
+
         public async Task<bool> TryConnect()
         {
             this.Kill();
+            this.LastError = string.Empty;
 
-            this.isConnected = await this.FetchStreamInformation();
+            try
+            {
+                if (string.IsNullOrWhiteSpace(this.liveId))
+                {
+                    this.LastError = "Falta el ID del directo de YouTube.";
+                    this.isConnected = false;
+                }
+                else
+                {
+                    this.isConnected = await this.FetchStreamInformation();
+                    if (!this.isConnected)
+                        this.LastError = "No se pudo leer el chat del directo de YouTube. Verificá que el ID corresponda a un directo activo.";
+                }
+            }
+            catch (Exception ex)
+            {
+                this.isConnected = false;
+                this.LastError = ex.GetBaseException().Message;
+                Debug.WriteLine("[YouTube] Could not connect to live chat: " + this.LastError);
+            }
 
             if (!this.isConnected)
             {
@@ -80,7 +102,7 @@ namespace GTAChaos.Utils
             else
             {
                 OnConnected?.Invoke(this, new EventArgs());
-                this.fetchMessagesTimer.Start();
+                this.fetchMessagesTimer?.Start();
             }
 
             return this.isConnected;
