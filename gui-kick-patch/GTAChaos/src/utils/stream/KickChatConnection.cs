@@ -327,8 +327,8 @@ namespace GTAChaos.Utils
         if (!element) return '';
         const clone = element.cloneNode(true);
         clone.querySelectorAll(
-            'img, svg, video, canvas, [data-testid*="emote"], [data-testid*="emoji"], ' +
-            '[class*="emote"], [class*="emoji"], [class*="sticker"]'
+            'img, svg, video, canvas, [data-testid*=""emote""], [data-testid*=""emoji""], ' +
+            '[class*=""emote""], [class*=""emoji""], [class*=""sticker""]'
         ).forEach(node => node.remove());
         return (clone.innerText || clone.textContent || '')
             .replace(/\u00a0/g, ' ')
