@@ -251,7 +251,12 @@ namespace GTAChaos.Utils
             string rawMessage = e.ChatMessage.Message ?? string.Empty;
             if (DebugChatCommandHandler.TryHandle("Twitch", username, rawMessage))
                 return;
-            string message = this.RemoveSpecialCharacters(rawMessage);
+
+            string plainText = ChatTextSanitizer.RemoveTwitchEmoteText(rawMessage, e.ChatMessage.EmoteSet);
+            if (string.IsNullOrWhiteSpace(plainText))
+                return;
+
+            string message = this.RemoveSpecialCharacters(plainText);
 
             if (this.VotingMode == Shared.VOTING_MODE.RAPID_FIRE)
             {
