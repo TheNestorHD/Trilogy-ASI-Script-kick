@@ -24,6 +24,8 @@ namespace GTAChaos.Utils
         private readonly string ClientID;
         private string Channel;
         private string Username;
+        private readonly Config.MultiStreamSourceConfig sourceConfig;
+        private readonly string sourceKey;
 
         private readonly ChatEffectVoting effectVoting = new();
         private readonly HashSet<string> rapidFireVoters = new();
@@ -31,10 +33,16 @@ namespace GTAChaos.Utils
 
         private VoteChoice lastChoice = VoteChoice.UNDETERMINED;
 
-        public TwitchChatConnection()
+        public TwitchChatConnection() : this(null, "single:twitch")
         {
-            this.AccessToken = Config.Instance().StreamAccessToken;
-            this.ClientID = Config.Instance().StreamClientID;
+        }
+
+        public TwitchChatConnection(Config.MultiStreamSourceConfig sourceConfig, string sourceKey)
+        {
+            this.sourceConfig = sourceConfig;
+            this.sourceKey = string.IsNullOrWhiteSpace(sourceKey) ? "single:twitch" : sourceKey;
+            this.AccessToken = sourceConfig == null ? Config.Instance().StreamAccessToken : sourceConfig.AccessToken;
+            this.ClientID = sourceConfig == null ? Config.Instance().StreamClientID : sourceConfig.ClientID;
 
             if (string.IsNullOrEmpty(this.AccessToken) || string.IsNullOrEmpty(this.ClientID))
             {
@@ -81,7 +89,9 @@ namespace GTAChaos.Utils
             }
 
             this.Username = data.Login;
-            this.Channel = data.Login;
+            this.Channel = this.sourceConfig != null && !string.IsNullOrWhiteSpace(this.sourceConfig.Channel)
+                ? this.sourceConfig.Channel.Trim().TrimStart('#')
+                : data.Login;
 
             this.InitializeTwitchClient();
 
@@ -125,6 +135,12 @@ namespace GTAChaos.Utils
 
         public void SetVoting(Shared.VOTING_MODE votingMode, int untilRapidFire = -1, List<IVotingElement> votingElements = null)
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+            {
+                this.SetMultiStreamVoting(votingMode, untilRapidFire, votingElements);
+                return;
+            }
+
             this.VotingMode = votingMode;
             if (this.VotingMode == Shared.VOTING_MODE.VOTING)
             {
@@ -212,6 +228,9 @@ namespace GTAChaos.Utils
 
         public List<IVotingElement> GetVotedEffects()
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+                return MultiStreamVotingCoordinator.GetVotedEffects();
+
             this.lastChoice = VoteChoice.NONE;
 
             List<IVotingElement> elements = Config.Instance().StreamMajorityVotes ? this.effectVoting.GetMajorityVotes() : this.effectVoting.GetTrulyRandomVotes();
@@ -223,6 +242,41 @@ namespace GTAChaos.Utils
             }
 
             return elements;
+        }
+
+        private void SetMultiStreamVoting(Shared.VOTING_MODE votingMode, int untilRapidFire, List<IVotingElement> votingElements)
+        {
+            this.VotingMode = votingMode;
+            MultiStreamVotingCoordinator.SetVotingMode(votingMode);
+
+            if (votingMode == Shared.VOTING_MODE.VOTING)
+            {
+                this.lastChoice = VoteChoice.UNDETERMINED;
+                List<IVotingElement> options = MultiStreamVotingCoordinator.GetOptions();
+                if (Config.Instance().StreamCombineChatMessages)
+                {
+                    string text = "Voting has started! Type 1, 2 or 3 to vote! ";
+                    foreach (IVotingElement option in options)
+                        text += $"#{option.GetId() + 1}: {option.GetEffect().GetDisplayName(DisplayNameType.STREAM)}. ";
+                    this.SendMessage(text);
+                }
+                else
+                {
+                    this.SendMessage("Voting has started! Type 1, 2 or 3 to vote for one of the effects!");
+                    foreach (IVotingElement option in options)
+                        this.SendMessage($"#{option.GetId() + 1}: {option.GetEffect().GetDisplayName(DisplayNameType.STREAM)}");
+                }
+            }
+            else if (votingMode == Shared.VOTING_MODE.RAPID_FIRE)
+            {
+                this.rapidFireVoters.Clear();
+                this.SendMessage("ATTENTION, ALL GAMERS! RAPID-FIRE HAS BEGUN!");
+            }
+            else if (votingElements != null && votingElements.Count > 0)
+            {
+                string enabledEffects = string.Join(", ", votingElements.Select(e => e.GetEffect().GetDisplayName(DisplayNameType.STREAM)));
+                this.SendMessage("Cooldown has started! Enabled effects: " + enabledEffects);
+            }
         }
 
         private void SendMessage(string message, bool prefix = true)
@@ -254,6 +308,11 @@ namespace GTAChaos.Utils
 
             string plainText = ChatTextSanitizer.RemoveTwitchEmoteText(rawMessage, e.ChatMessage.EmoteSet);
             if (string.IsNullOrWhiteSpace(plainText))
+                return;
+
+            StreamChatMessageBus.Publish(this.sourceKey, "Twitch", this.Channel, username, plainText);
+
+            if (MultiStreamVotingCoordinator.IsActive)
                 return;
 
             string message = this.RemoveSpecialCharacters(plainText);
@@ -306,6 +365,12 @@ namespace GTAChaos.Utils
 
         public void SendEffectVotingToGame(bool undetermined = true)
         {
+            if (MultiStreamVotingCoordinator.IsActive)
+            {
+                MultiStreamVotingCoordinator.SendEffectVotingToGame(undetermined);
+                return;
+            }
+
             if (this.effectVoting.IsEmpty())
             {
                 return;
