@@ -320,6 +320,21 @@ namespace GTAChaos.Utils
         '[class*=""chatroom""]'
     ];
     const seenContent = new WeakSet();
+
+    // Game/overlay output is text-only: remove emote images, SVGs, stickers and
+    // other rich media before reading a message. Messages with no remaining text are ignored.
+    const readPlainText = (element) => {
+        if (!element) return '';
+        const clone = element.cloneNode(true);
+        clone.querySelectorAll(
+            'img, svg, video, canvas, [data-testid*="emote"], [data-testid*="emoji"], ' +
+            '[class*="emote"], [class*="emoji"], [class*="sticker"]'
+        ).forEach(node => node.remove());
+        return (clone.innerText || clone.textContent || '')
+            .replace(/\u00a0/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
     // Popout chat uses virtualized [data-index] rows on current Kick layouts.
     // WeakMap fingerprints let a recycled row emit a new message when its text changes.
     const seenPopoutRows = new WeakMap();
@@ -368,7 +383,7 @@ namespace GTAChaos.Utils
             if (!authorElement || !messageRoot) continue;
 
             const username = (authorElement.innerText || authorElement.textContent || '').trim();
-            const content = (contentElement.innerText || contentElement.textContent || '').trim();
+            const content = readPlainText(contentElement);
             if (!username || !content) continue;
 
             seenContent.add(contentElement);
@@ -393,10 +408,7 @@ namespace GTAChaos.Utils
             // Legacy markup is handled above using .chat-entry-content.
             if (row.querySelector && row.querySelector('.chat-entry-content')) continue;
 
-            const rawText = (row.innerText || row.textContent || '')
-                .replace(/\u00a0/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
+            const rawText = readPlainText(row);
             if (!rawText || /^new messages$/i.test(rawText) ||
                 /deleted by a moderator/i.test(rawText)) continue;
             if (seenPopoutRows.get(row) === rawText) continue;
