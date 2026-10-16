@@ -231,9 +231,9 @@ namespace GTAChaos.Utils
             if (string.IsNullOrWhiteSpace(message))
                 return -1;
 
-            string normalized = Regex.Replace(message.Trim(), @"\s+", string.Empty);
-            if (normalized.StartsWith("#", StringComparison.Ordinal))
-                normalized = normalized.Substring(1);
+            // Match the legacy platform readers: punctuation and spacing around
+            // a single choice are ignored, but text such as "vote 1" is not a vote.
+            string normalized = Regex.Replace(message.Trim(), @"[^A-Za-z0-9]", string.Empty);
 
             return normalized.Length == 1 && normalized[0] >= '1' && normalized[0] <= '3'
                 ? normalized[0] - '1'
