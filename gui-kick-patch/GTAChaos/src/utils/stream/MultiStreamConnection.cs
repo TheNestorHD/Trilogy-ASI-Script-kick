@@ -263,7 +263,7 @@ namespace GTAChaos.Utils
             lock (this.stateLock)
             {
                 if (!this.stopping && this.hadConnectedSource &&
-                    !this.sources.Any(item => !ReferenceEquals(item, source) && item.Connection.IsConnected()))
+                    !this.sources.Any(item => !ReferenceEquals(item, source) && item.Connected))
                 {
                     this.hadConnectedSource = false;
                     notify = true;
