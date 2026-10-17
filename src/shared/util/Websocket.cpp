@@ -168,7 +168,8 @@ Websocket::CallFunction (std::string text)
                     data.value ("enabled", true),
                     data.value ("hideDuringHideChaosUi", false),
                     data.value ("maxMessages", 6),
-                    data.value ("durationSeconds", 10));
+                    data.value ("durationSeconds", 10),
+                    data.value ("fontSizePercent", 135));
             }
             else if (type == "chat")
             {

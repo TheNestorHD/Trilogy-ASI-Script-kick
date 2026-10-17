@@ -74,6 +74,9 @@ All game/chat overlay text must be plain text. Strip message spans that the adap
 
 - The OBS footer progress strip and platform-neutral instruction are implemented.
 - The GUI includes MultiStream source profiles and a shared voting coordinator, with up to three sources and per-source chat/voting toggles.
+- Chat options are in an independent **Chat** tab that remains available for single-platform streams and while connected. They apply live and persist to `config.cfg`.
+- Chat controls include visibility, hiding with the Chaos UI effect, 1–15 messages, 3–120 seconds lifetime, 70–200% font size, and a test-message button. The new default font is 135% of the former size; old saved configurations without this field receive that default.
+- Changing chat font size immediately rewraps existing messages and scales row height, while the panel stays bounded by the viewport.
 - A native plain-text chat renderer is wired through the existing websocket protocol. The GUI exposes enable/disable, maximum visible messages, message lifetime, and whether chat should hide during `hide_chaos_ui`.
 - Chat messages and chat settings are not buffered while the game is disconnected. When the native client sends its `game` handshake on connect/reconnect, the GUI sends fresh chat settings.
 - YouTube paid-message and membership events are intentionally excluded; platform adapters publish normalized text only.

@@ -204,7 +204,7 @@ namespace GTAChaos.Utils
             this.SendDataToWebsocket(jsonObject);
         }
 
-        public void SendStreamChatConfig(bool enabled, bool hideDuringHideChaosGui, int maxMessages, int durationSeconds)
+        public void SendStreamChatConfig(bool enabled, bool hideDuringHideChaosGui, int maxMessages, int durationSeconds, int fontSizePercent)
         {
             JObject jsonObject = JObject.FromObject(new
             {
@@ -214,7 +214,8 @@ namespace GTAChaos.Utils
                     enabled,
                     hideDuringHideChaosUi = hideDuringHideChaosGui,
                     maxMessages,
-                    durationSeconds
+                    durationSeconds,
+                    fontSizePercent
                 }
             });
 

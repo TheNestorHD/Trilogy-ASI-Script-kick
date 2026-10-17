@@ -58,11 +58,15 @@ DrawHelper::Draw ()
 
     DrawVersion ();
 
-    if (!CONFIG ("Drawing.Enabled", true)) return;
-
-    // The chat overlay has its own hide-during-Hide-Chaos-GUI setting, so render
-    // it before the legacy early return hides the rest of the Chaos Mod UI.
+    // In-game chat has its own visibility setting, independent of whether
+    // legacy Chaos Mod UI drawing is enabled.
     DrawChat::Draw ();
+
+    if (!CONFIG ("Drawing.Enabled", true))
+    {
+        CFont::DrawFonts ();
+        return;
+    }
 
     if (Globals::enabledEffects["hide_chaos_ui"])
     {

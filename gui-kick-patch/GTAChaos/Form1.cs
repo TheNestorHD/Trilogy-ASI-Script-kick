@@ -24,6 +24,7 @@ namespace GTAChaos.Forms
         private IStreamConnection stream;
 
         private TabPage tabMultiStreamSettings;
+        private TabPage tabChatSettings;
         private TabPage tabDebugSettings;
         private CheckBox checkBoxMultiStreamEnabled;
         private CheckBox checkBoxDebugChatCommands;
@@ -115,7 +116,8 @@ namespace GTAChaos.Forms
                 config.StreamChatOverlayEnabled,
                 config.StreamChatHideDuringHideChaosGui,
                 config.StreamChatMaxMessages,
-                config.StreamChatMessageDurationSeconds);
+                config.StreamChatMessageDurationSeconds,
+                config.StreamChatFontSizePercent);
         }
 
         private void OnMultiStreamChatMessage(object sender, StreamChatMessageEventArgs e)
@@ -1900,6 +1902,7 @@ namespace GTAChaos.Forms
         {
             this.EnsureMultiStreamProfiles();
             this.CreateMultiStreamSettingsTab();
+            this.CreateChatSettingsTab();
             this.CreateDebugSettingsTab();
 
             DebugChatCommandHandler.CommandReceived += this.OnDebugChatCommandReceived;
@@ -2030,85 +2033,6 @@ namespace GTAChaos.Forms
                 Text = "MultiStream guarda aquí la configuración de las fuentes.",
                 Margin = new Padding(3, 4, 3, 12)
             };
-            var chatGroup = new GroupBox
-            {
-                Text = "Chat dentro del juego",
-                Width = 650,
-                Height = 145,
-                Padding = new Padding(8),
-                Margin = new Padding(3, 3, 3, 10)
-            };
-            var chatContents = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Padding = new Padding(4)
-            };
-
-            var checkBoxChatOverlayEnabled = new CheckBox
-            {
-                AutoSize = true,
-                Text = "Mostrar mensajes de las fuentes conectadas en GTA",
-                Checked = Config.Instance().StreamChatOverlayEnabled,
-                Margin = new Padding(3, 2, 3, 5)
-            };
-            var checkBoxChatHideDuringHideUi = new CheckBox
-            {
-                AutoSize = true,
-                Text = "Ocultar el chat durante el efecto Hide Chaos Mod GUI",
-                Checked = Config.Instance().StreamChatHideDuringHideChaosGui,
-                Margin = new Padding(3, 2, 3, 5)
-            };
-
-            var chatLimitsRow = new FlowLayoutPanel
-            {
-                Width = 615,
-                Height = 30,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Margin = new Padding(0)
-            };
-            var maxMessages = new NumericUpDown
-            {
-                Minimum = 1,
-                Maximum = 10,
-                Width = 58,
-                Value = Math.Max(1, Math.Min(10, Config.Instance().StreamChatMaxMessages)),
-                Margin = new Padding(3, 2, 15, 2)
-            };
-            var messageDuration = new NumericUpDown
-            {
-                Minimum = 3,
-                Maximum = 30,
-                Width = 58,
-                Value = Math.Max(3, Math.Min(30, Config.Instance().StreamChatMessageDurationSeconds)),
-                Margin = new Padding(3, 2, 6, 2)
-            };
-            chatLimitsRow.Controls.Add(new Label { Text = "Mensajes visibles:", AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(3, 6, 4, 3) });
-            chatLimitsRow.Controls.Add(maxMessages);
-            chatLimitsRow.Controls.Add(new Label { Text = "Duración (segundos):", AutoSize = true, TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(3, 6, 4, 3) });
-            chatLimitsRow.Controls.Add(messageDuration);
-
-            Action updateChatSettings = () =>
-            {
-                Config.Instance().StreamChatOverlayEnabled = checkBoxChatOverlayEnabled.Checked;
-                Config.Instance().StreamChatHideDuringHideChaosGui = checkBoxChatHideDuringHideUi.Checked;
-                Config.Instance().StreamChatMaxMessages = (int)maxMessages.Value;
-                Config.Instance().StreamChatMessageDurationSeconds = (int)messageDuration.Value;
-                this.SendStreamChatSettings();
-            };
-            checkBoxChatOverlayEnabled.CheckedChanged += (s, e) => updateChatSettings();
-            checkBoxChatHideDuringHideUi.CheckedChanged += (s, e) => updateChatSettings();
-            maxMessages.ValueChanged += (s, e) => updateChatSettings();
-            messageDuration.ValueChanged += (s, e) => updateChatSettings();
-
-            chatContents.Controls.Add(checkBoxChatOverlayEnabled);
-            chatContents.Controls.Add(checkBoxChatHideDuringHideUi);
-            chatContents.Controls.Add(chatLimitsRow);
-            chatGroup.Controls.Add(chatContents);
-            panel.Controls.Add(chatGroup);
-
             panel.Controls.Add(this.labelMultiStreamStatus);
 
             var saveButton = new Button
@@ -2127,6 +2051,149 @@ namespace GTAChaos.Forms
             this.tabMultiStreamSettings.Controls.Add(panel);
             this.tabs.TabPages.Add(this.tabMultiStreamSettings);
             this.UpdateMultiStreamStatus();
+        }
+
+
+        // Chat is a standalone tab: the single-platform mode uses the same overlay
+        // as MultiStream, and these controls stay available while streaming.
+        private void CreateChatSettingsTab()
+        {
+            this.tabChatSettings = new TabPage("Chat");
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(16)
+            };
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true,
+                Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold),
+                Text = "Chat dentro del GTA",
+                Margin = new Padding(3, 3, 3, 8)
+            });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true,
+                MaximumSize = new System.Drawing.Size(650, 0),
+                Text = "Funciona con un solo canal de Kick, Twitch o YouTube, y también con MultiStream. Los cambios se aplican en vivo si GTA está conectado.",
+                Margin = new Padding(3, 0, 3, 14)
+            });
+
+            var enabled = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Mostrar chat dentro del juego",
+                Checked = Config.Instance().StreamChatOverlayEnabled,
+                Margin = new Padding(3, 3, 3, 10)
+            };
+            var hideWithChaosUi = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Ocultar chat durante el efecto Hide Chaos Mod GUI",
+                Checked = Config.Instance().StreamChatHideDuringHideChaosGui,
+                Margin = new Padding(3, 3, 3, 14)
+            };
+            panel.Controls.Add(enabled);
+            panel.Controls.Add(hideWithChaosUi);
+
+            var limitsRow = new FlowLayoutPanel
+            {
+                Width = 640,
+                Height = 37,
+                WrapContents = false,
+                FlowDirection = FlowDirection.LeftToRight,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            var maxMessages = new NumericUpDown
+            {
+                Minimum = 1,
+                Maximum = 15,
+                Width = 65,
+                Value = Math.Max(1, Math.Min(15, Config.Instance().StreamChatMaxMessages)),
+                Margin = new Padding(3, 2, 18, 2)
+            };
+            var duration = new NumericUpDown
+            {
+                Minimum = 3,
+                Maximum = 120,
+                Width = 68,
+                Value = Math.Max(3, Math.Min(120, Config.Instance().StreamChatMessageDurationSeconds)),
+                Margin = new Padding(3, 2, 8, 2)
+            };
+            limitsRow.Controls.Add(new Label { Text = "Mensajes:", AutoSize = true, Margin = new Padding(3, 6, 5, 3) });
+            limitsRow.Controls.Add(maxMessages);
+            limitsRow.Controls.Add(new Label { Text = "Duración (seg.):", AutoSize = true, Margin = new Padding(3, 6, 5, 3) });
+            limitsRow.Controls.Add(duration);
+            panel.Controls.Add(limitsRow);
+
+            var fontRow = new FlowLayoutPanel
+            {
+                Width = 640,
+                Height = 40,
+                WrapContents = false,
+                FlowDirection = FlowDirection.LeftToRight,
+                Margin = new Padding(0, 0, 0, 5)
+            };
+            var fontSize = new NumericUpDown
+            {
+                Minimum = 70,
+                Maximum = 200,
+                Increment = 10,
+                Width = 72,
+                Value = Math.Max(70, Math.Min(200, Config.Instance().StreamChatFontSizePercent)),
+                Margin = new Padding(3, 2, 6, 2)
+            };
+            fontRow.Controls.Add(new Label { Text = "Tamaño de letra:", AutoSize = true, Margin = new Padding(3, 6, 5, 3) });
+            fontRow.Controls.Add(fontSize);
+            fontRow.Controls.Add(new Label { Text = "% (100% = tamaño anterior)", AutoSize = true, Margin = new Padding(3, 6, 5, 3) });
+            panel.Controls.Add(fontRow);
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true,
+                MaximumSize = new System.Drawing.Size(650, 0),
+                Text = "Al agrandar la letra, los mensajes se ajustan automáticamente a varias líneas. Si hay demasiadas, se muestran las más recientes.",
+                Margin = new Padding(3, 0, 3, 15)
+            });
+
+            Action updateChatSettings = () =>
+            {
+                Config.Instance().StreamChatOverlayEnabled = enabled.Checked;
+                Config.Instance().StreamChatHideDuringHideChaosGui = hideWithChaosUi.Checked;
+                Config.Instance().StreamChatMaxMessages = (int)maxMessages.Value;
+                Config.Instance().StreamChatMessageDurationSeconds = (int)duration.Value;
+                Config.Instance().StreamChatFontSizePercent = (int)fontSize.Value;
+                this.SendStreamChatSettings();
+            };
+            enabled.CheckedChanged += (s, e) => updateChatSettings();
+            hideWithChaosUi.CheckedChanged += (s, e) => updateChatSettings();
+            maxMessages.ValueChanged += (s, e) => updateChatSettings();
+            duration.ValueChanged += (s, e) => updateChatSettings();
+            fontSize.ValueChanged += (s, e) => updateChatSettings();
+
+            var actionsRow = new FlowLayoutPanel
+            {
+                Width = 640,
+                Height = 42,
+                WrapContents = false,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+            var testButton = new Button { Text = "Enviar mensaje de prueba", AutoSize = true, Margin = new Padding(3, 3, 15, 3) };
+            testButton.Click += (s, e) =>
+            {
+                this.SendStreamChatSettings();
+                WebsocketHandler.INSTANCE.SendChatMessage("Prueba", "ChaosMod", "¡Así se ve el chat con ñ, tildes y mensajes largos! Podés agrandar el texto sin que se corte.");
+            };
+            var saveButton = new Button { Text = "Guardar ahora", AutoSize = true, Margin = new Padding(3) };
+            saveButton.Click += (s, e) => this.SaveConfig();
+            actionsRow.Controls.Add(testButton);
+            actionsRow.Controls.Add(saveButton);
+            panel.Controls.Add(actionsRow);
+
+            this.tabChatSettings.Controls.Add(panel);
+            this.tabs.TabPages.Add(this.tabChatSettings);
         }
 
         private Control CreateMultiStreamTextRow(string label, TextBox textBox)

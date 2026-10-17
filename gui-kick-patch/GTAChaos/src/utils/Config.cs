@@ -59,6 +59,8 @@ namespace GTAChaos.Utils
         public bool StreamChatHideDuringHideChaosGui;
         public int StreamChatMaxMessages = 6;
         public int StreamChatMessageDurationSeconds = 10;
+        // Percentage of the original small font size. Defaults larger for readability.
+        public int StreamChatFontSizePercent = 135;
 
         // MultiStream source profiles. The connection manager will consume these
         // profiles; keeping them in config now lets the GUI persist its setup.
